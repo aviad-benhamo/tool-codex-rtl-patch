@@ -1,203 +1,338 @@
-# Codex Desktop RTL Patch
+# Codex Desktop RTL Patch for Windows
 
-Unofficial local RTL patch for Codex Desktop on **Windows and macOS**.
+Private, unofficial RTL patch for Codex Desktop on Windows.
 
-This patch improves Hebrew, Arabic, and mixed right-to-left text rendering in
-Codex Desktop while keeping code blocks, inline code, terminals, and editor-like
-surfaces left-to-right.
+The patch improves Hebrew, Arabic, and mixed right-to-left text while keeping
+code blocks, inline code, terminals, and editor-like surfaces left-to-right.
 
-> **macOS support** was added in this fork. The RTL patch logic
-> (`src/codex-rtl-patch.js`) is shared across platforms; only the installer
-> differs. See [macOS](#macos) below. Windows instructions are unchanged.
+This fork is maintained for personal Windows use. The macOS scripts currently
+remain in the repository as legacy upstream files, but they are not part of the
+supported workflow documented here.
 
-## What It Does
+## Safety Model
 
-- Detects Hebrew/Arabic text and applies `dir="rtl"` where appropriate.
-- Uses `unicode-bidi: plaintext` for mixed Hebrew/English paragraphs.
-- Keeps `pre`, `code`, terminal, Monaco/CodeMirror-like, and syntax-highlighted
-  content left-to-right.
-- Switches the Codex composer direction while typing.
-- Installs into a local copy of Codex instead of modifying the official app.
+The Windows installer does not modify the Microsoft Store/MSIX installation
+under `C:\Program Files\WindowsApps`.
 
-## What It Does Not Do
+It copies the installed Codex application to:
 
-This project intentionally does **not**:
-
-- edit files under `C:\Program Files\WindowsApps`
-- replace hashes inside executables
-- install certificates
-- change Windows Trusted Root stores
-- redistribute Codex or any OpenAI app files
-
-The installer copies the locally installed Codex app to:
-
-```powershell
+```text
 %LOCALAPPDATA%\OpenAI\CodexRtl\app
 ```
 
-Then it patches only the copied `resources\app.asar` and creates a desktop
-shortcut named `Codex RTL`.
+It then patches only the copied `resources\app.asar` and creates a separate
+desktop shortcut named `Codex RTL`.
+
+Always install from a reviewed local clone. Do not pipe remote scripts into
+PowerShell with `irm | iex`.
+
+## What the Patch Does
+
+- Detects Hebrew and Arabic text and applies RTL direction where appropriate.
+- Uses `unicode-bidi: plaintext` for mixed Hebrew and English paragraphs.
+- Keeps code, terminals, Monaco, CodeMirror, and syntax-highlighted content LTR.
+- Changes the composer direction according to the text being typed.
+- Reprocesses dynamically rendered Codex UI content.
 
 ## Requirements
 
-- Windows.
-- Codex Desktop installed.
-- Node.js 22+ with `npx` available.
+- Windows 10 or Windows 11.
+- Codex Desktop installed from the official source.
+- Node.js 22 or newer, including npm and `npx`.
+- A local clone of this repository.
 
-Check:
+Check the prerequisites from PowerShell:
 
 ```powershell
+Get-AppxPackage -Name OpenAI.Codex
 node --version
 npx.cmd --version
+Test-Path .\src\codex-rtl-patch.js
 ```
 
-## Install From GitHub
+The first command should return the installed Codex package, and the final
+command should return `True`.
 
-Close the regular Codex app first.
+## Safe Installation
 
-Run in PowerShell:
+### 1. Open the local clone
 
 ```powershell
-irm https://raw.githubusercontent.com/mnigli/codex-desktop-rtl-patch/main/install.ps1 | iex
+cd C:\Workspace\active\codex-desktop-rtl-patch
+git status --short
 ```
 
-Then open Codex from the new desktop shortcut:
+Review local changes before running the installer. The installer should use the
+local `src\codex-rtl-patch.js` file and should not need to download it.
 
-```text
-Codex RTL
-```
+### 2. Record the original Codex ASAR hash
 
-If the regular Codex app is still running, Windows/Electron may reuse the
-existing instance. Close all Codex windows and launch `Codex RTL` again.
-
-## Install From a Clone
+This baseline lets you confirm later that the official installation was not
+modified:
 
 ```powershell
-git clone https://github.com/mnigli/codex-desktop-rtl-patch.git
-cd codex-desktop-rtl-patch
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+$pkg = Get-AppxPackage -Name OpenAI.Codex |
+    Sort-Object Version -Descending |
+    Select-Object -First 1
+$officialAsar = Join-Path $pkg.InstallLocation 'app\resources\app.asar'
+$beforeHash = (Get-FileHash -Algorithm SHA256 $officialAsar).Hash
+$beforeHash
 ```
 
-## Dry Run
+Keep this PowerShell window open until post-install verification so
+`$officialAsar` and `$beforeHash` remain available.
+
+### 3. Run DryRun first
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -DryRun
 ```
 
-## Update After Codex Updates
+Expected behavior:
 
-When Codex updates, rerun the installer:
+- Finds the installed `OpenAI.Codex` package.
+- Finds `npx.cmd` or `npx`.
+- Prints planned `robocopy`, ASAR extraction, injection, packing, and shortcut
+  actions.
+- Ends with `Dry run completed. No files were changed.`
+
+DryRun does not run `robocopy` or `npx`, download files, create the temporary
+ASAR directory, patch files, create a shortcut, or launch Codex.
+
+Stop if the package or `app.asar` is not found, `npx` is missing, any planned
+path is unexpected, or the final no-change message is absent.
+
+### 4. Close Codex
+
+Close every regular and patched Codex window before installation. This avoids
+locked files and prevents Electron from reusing an already-running instance
+when the patched copy is launched.
+
+### 5. Run the installer
 
 ```powershell
-irm https://raw.githubusercontent.com/mnigli/codex-desktop-rtl-patch/main/install.ps1 | iex
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-The installer mirrors the current official Codex app into the local RTL copy
-and reapplies the patch.
+The first real run may use `npx` to obtain the pinned
+`@electron/asar@4.2.0` package. Review the security notes below before
+proceeding on an untrusted network or machine.
+
+A successful installation ends with:
+
+```text
+OK  Codex RTL is installed.
+Launch it from the desktop shortcut: Codex RTL
+```
+
+## Verify the Installation
+
+### Verify the created artifacts
+
+```powershell
+$installRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
+$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Codex RTL.lnk'
+
+Test-Path (Join-Path $installRoot 'app\Codex.exe')
+Test-Path (Join-Path $installRoot 'app\resources\app.asar')
+Test-Path (Join-Path $installRoot 'patch-state.json')
+Test-Path $shortcut
+Get-Content (Join-Path $installRoot 'patch-state.json')
+```
+
+All four `Test-Path` commands should return `True`. The state file should name
+the official package version and show the source and target directories.
+
+Verify the shortcut target:
+
+```powershell
+$shell = New-Object -ComObject WScript.Shell
+$link = $shell.CreateShortcut($shortcut)
+$link.TargetPath
+```
+
+The target should be:
+
+```text
+%LOCALAPPDATA%\OpenAI\CodexRtl\app\Codex.exe
+```
+
+### Verify the official Codex installation was not modified
+
+In the same PowerShell window used to record the baseline:
+
+```powershell
+$afterHash = (Get-FileHash -Algorithm SHA256 $officialAsar).Hash
+$beforeHash -eq $afterHash
+```
+
+The result should be `True`.
+
+Also confirm that the patched ASAR is in the separate local copy:
+
+```powershell
+$patchedAsar = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl\app\resources\app.asar'
+$officialAsar
+$patchedAsar
+Test-Path $officialAsar
+Test-Path $patchedAsar
+```
+
+Both files should exist at different paths. The official path should be inside
+the installed MSIX package; the patched path should be under LocalAppData.
+
+### Verify the RTL behavior
+
+1. Ensure all existing Codex windows are closed.
+2. Open the desktop shortcut named `Codex RTL`.
+3. Confirm Codex starts normally and can access the expected account/workspace.
+4. Type a Hebrew or Arabic sentence in the composer and confirm it aligns RTL.
+5. Type an English sentence and confirm it aligns LTR.
+6. Open a response containing code and confirm code blocks remain LTR.
+7. Test a mixed Hebrew/English paragraph.
+
+If the regular Codex instance was already running, Electron may reuse it.
+Close every Codex window and launch `Codex RTL` again before concluding that
+the patch is not active.
+
+## Files and Folders Created
+
+Persistent files:
+
+```text
+%LOCALAPPDATA%\OpenAI\CodexRtl\app\
+%LOCALAPPDATA%\OpenAI\CodexRtl\patch-state.json
+<Desktop>\Codex RTL.lnk
+```
+
+Temporary or indirect files:
+
+- `%TEMP%\codex-rtl-asar-<GUID>\` exists while ASAR extraction and packing run.
+  The installer removes it on normal completion or handled failure.
+- The normal npm cache may retain `@electron/asar` and its dependencies.
+
+Do not store personal files under `%LOCALAPPDATA%\OpenAI\CodexRtl`. Re-running
+the installer mirrors the official app with `robocopy /MIR` and may delete
+unexpected files from the copied app directory.
 
 ## Uninstall
 
-From a clone:
+Close all Codex windows, then run from the local clone:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
+```
+
+The uninstaller removes:
+
+```text
+%LOCALAPPDATA%\OpenAI\CodexRtl\
+<Desktop>\Codex RTL.lnk
+```
+
+Verify removal:
+
+```powershell
+Test-Path "$env:LOCALAPPDATA\OpenAI\CodexRtl"
+Test-Path "$([Environment]::GetFolderPath('Desktop'))\Codex RTL.lnk"
+```
+
+Both commands should return `False`. The official Codex installation remains
+installed and unchanged.
+
+## Recovery
+
+If `Codex RTL` fails to start, crashes, or behaves incorrectly:
+
+1. Close all Codex windows.
+2. Run the uninstaller from the local clone:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
-Or manually remove:
+3. Launch the regular Codex Desktop application from the Start menu.
+4. Confirm the regular application still works.
+5. Review the installer output and the current Codex package version before
+   attempting another install.
+
+If the uninstaller cannot remove the copy because a process is still running:
 
 ```powershell
-Remove-Item "$env:LOCALAPPDATA\OpenAI\CodexRtl" -Recurse -Force
-Remove-Item "$([Environment]::GetFolderPath('Desktop'))\Codex RTL.lnk" -Force
+Get-Process Codex -ErrorAction SilentlyContinue
+Stop-Process -Name Codex -Force
+powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
-Uninstall removes only the local RTL copy and shortcut. It does not remove or
-modify the official Codex installation.
+`Stop-Process` closes every process named `Codex`, including the official app,
+so save active work first.
 
-## macOS
+As a final manual recovery, only after verifying the paths:
 
-The macOS installer patches the app **in place** under `/Applications/Codex.app`
-and keeps timestamped backups, so it is fully reversible. It does not copy,
-re-sign, or redistribute Codex.
+```powershell
+$installRoot = [System.IO.Path]::GetFullPath(
+    (Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl')
+)
+$expectedRoot = [System.IO.Path]::GetFullPath(
+    (Join-Path $env:LOCALAPPDATA 'OpenAI')
+)
 
-### Requirements
+if (
+    $installRoot.StartsWith($expectedRoot + '\', [StringComparison]::OrdinalIgnoreCase) -and
+    (Test-Path -LiteralPath $installRoot)
+) {
+    Remove-Item -LiteralPath $installRoot -Recurse -Force
+}
 
-- macOS.
-- Codex Desktop installed (`/Applications/Codex.app`).
-- Node.js 22+ with `npm` (ships with Node).
-
-### Install
-
-```bash
-git clone https://github.com/aviz85/codex-desktop-rtl-patch.git
-cd codex-desktop-rtl-patch
-chmod +x install.sh uninstall.sh
-./install.sh
+$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Codex RTL.lnk'
+Remove-Item -LiteralPath $shortcut -Force -ErrorAction SilentlyContinue
 ```
 
-Options: `./install.sh --dry-run` (change nothing), `./install.sh --no-launch`,
-or `CODEX_APP=/path/to/Codex.app ./install.sh` to override the app location.
+Recovery never requires editing or deleting files under `WindowsApps`.
 
-### How it works on macOS
+## After Codex Desktop Updates
 
-1. Quits Codex if running.
-2. Backs up `app.asar` and `Info.plist` **outside the bundle**, in
-   `~/Library/Application Support/codex-rtl-patch/` (once). Backups must not live
-   inside `Contents/` — a stray file there invalidates the code signature.
-3. Extracts the asar, drops `codex-rtl-patch.js` into `webview/assets/`, and
-   references it from `webview/index.html`, then repacks the asar.
-4. **Recomputes the Electron ASAR integrity hash.** macOS Electron builds embed
-   the expected asar header hash in `Info.plist`
-   (`ElectronAsarIntegrity → Resources/app.asar → hash`) and abort on launch
-   (SIGTRAP) if the asar changed. The installer computes the new `sha256` of the
-   patched asar **header string** and writes it back to `Info.plist`.
-5. **Re-signs the app (ad-hoc).** Editing `app.asar` + `Info.plist` breaks the
-   code signature; on Apple Silicon / hardened-runtime builds macOS then refuses
-   to launch ("Codex can't be opened"). The installer re-signs the top level only
-   (nested OpenAI frameworks keep their signatures) with
-   `disable-library-validation` so the now-ad-hoc main process can still load
-   OpenAI's Electron Framework. `spctl` will report "rejected" afterwards — that
-   is expected and harmless for an unquarantined local app.
-6. Relaunches Codex.
+The patched copy does not update automatically with the official package.
+After Codex Desktop updates:
 
-Run `./check-macos.sh` any time to confirm the patched app is launch-safe
-(signature valid + integrity hashes match + patch present).
+1. Confirm the regular Codex application works.
+2. Open the local repository and review any new local changes.
+3. Run DryRun:
 
-> The installer is written to parse and run on macOS's stock `bash` 3.2.
-
-A harmless `Keychain lookup failed (errSecAuthFailed)` line may appear in the
-logs — it is a side effect of modifying a signed bundle and does not affect
-Codex sign-in (Codex auth lives in `~/.codex`, not the Chromium keychain).
-
-### Update after Codex updates
-
-A Codex auto-update overwrites `app.asar` and reverts the patch. Either re-run
-`./install.sh`, or install the **auto-patch agent** so it re-applies automatically:
-
-```bash
-cd autopatch
-chmod +x install-autopatch.sh uninstall-autopatch.sh
-./install-autopatch.sh
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -DryRun
 ```
 
-This installs a LaunchAgent that watches `app.asar`. **By default it only detects
-updates and notifies you** (run `./install.sh` once after the notification) —
-macOS 14+ App Management protection blocks a background agent from rewriting an
-app in `/Applications`. For **fully automatic** re-applying, grant the agent's
-`/bin/bash` a one-time **Full Disk Access** (designed-but-not-yet-end-to-end-
-verified). See [`autopatch/README.md`](autopatch/README.md).
+4. Close all Codex windows.
+5. Re-run the installer:
 
-### Uninstall (macOS)
-
-```bash
-./uninstall.sh
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-This restores the original `app.asar` and `Info.plist` from the backups and
-relaunches the unpatched app.
+The installer mirrors the latest official app into the local copy and reapplies
+the patch. Repeat the artifact, original-hash, launch, and RTL checks above.
 
-## Safety Notice
+Codex UI internals may change between releases. A successful installer run does
+not guarantee that the injected patch remains compatible with every new Codex
+version.
 
-This is an unofficial patch. Codex UI internals may change, so the patch can
-break after app updates. Reinstalling the patch after a Codex update is expected.
+## Security Notes
 
-Use at your own risk.
+- Do not use `irm | iex` or execute installer content directly from a URL.
+- Review the local scripts and `src\codex-rtl-patch.js` before installation.
+- The current installer can download the patch from its configured upstream URL
+  only if the local patch file is missing. For this workflow, treat a missing
+  local patch file as a reason to stop and investigate.
+- `npx --yes @electron/asar@4.2.0` may download and execute package code from
+  the npm registry. A future hardening step should replace this with a
+  lockfile-backed and integrity-verified local dependency workflow.
+- The patched Codex copy is not a security sandbox. It may use the same Codex
+  account and user-data locations as the official application.
+
+## Project Status
+
+This is an unofficial personal patch, not an OpenAI product. Keep the regular
+Codex Desktop installation available as the recovery path and revalidate the
+patch after every Codex update.
