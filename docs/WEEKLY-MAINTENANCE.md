@@ -46,12 +46,6 @@ It is safe if this returns an error saying no process was found.
 Open the Desktop shortcut:
 
 ```text
-Codex (Original)
-```
-
-or:
-
-```text
 Launch Codex Original
 ```
 
