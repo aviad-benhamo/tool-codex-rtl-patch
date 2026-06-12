@@ -9,8 +9,7 @@
 #>
 param(
     [switch]$DryRun,
-    [switch]$Launch,
-    [string]$PatchJsUrl = 'https://raw.githubusercontent.com/mnigli/codex-desktop-rtl-patch/main/src/codex-rtl-patch.js'
+    [switch]$Launch
 )
 
 Set-StrictMode -Version Latest
@@ -71,6 +70,12 @@ function Get-NpxCommand {
     return $cmd.Source
 }
 
+function Assert-LocalPatchFile {
+    if (-not (Test-Path -LiteralPath $PatchJsSource -PathType Leaf)) {
+        throw "Required local patch file was not found: $PatchJsSource. Restore src\codex-rtl-patch.js in this repository and rerun the installer. Remote downloads are disabled."
+    }
+}
+
 function Invoke-RobocopyMirror([string]$Source, [string]$Destination) {
     if ($DryRun) {
         Write-Host "DRY RUN robocopy `"$Source`" `"$Destination`" /MIR"
@@ -116,26 +121,14 @@ function Remove-TreeBestEffort([string]$Path) {
 
 function Copy-PatchFile([string]$ExtractDir) {
     $dest = Join-Path $ExtractDir 'webview\assets\codex-rtl-patch.js'
+    Assert-LocalPatchFile
+
     if ($DryRun) {
         Write-Host "DRY RUN copy patch JS to $dest"
         return
     }
 
-    if (Test-Path -LiteralPath $PatchJsSource) {
-        Copy-Item -LiteralPath $PatchJsSource -Destination $dest -Force
-        return
-    }
-
-    if (-not $PatchJsUrl) {
-        throw "Patch JS was not found locally and PatchJsUrl was not provided: $PatchJsSource"
-    }
-
-    Write-Warn "Patch JS was not found locally. Downloading from: $PatchJsUrl"
-    try {
-        [Net.ServicePointManager]::SecurityProtocol =
-            [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    } catch { }
-    Invoke-WebRequest -UseBasicParsing -Uri $PatchJsUrl -OutFile $dest
+    Copy-Item -LiteralPath $PatchJsSource -Destination $dest -Force
 }
 
 function Patch-IndexHtml([string]$ExtractDir) {
@@ -252,6 +245,10 @@ function Save-State([object]$Package, [string]$SourceAppDir) {
     $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
     [System.IO.File]::WriteAllText($StatePath, $json + "`n", $utf8NoBom)
 }
+
+Write-Step 'Checking local patch file'
+Assert-LocalPatchFile
+Write-Ok "Using local patch: $PatchJsSource"
 
 Write-Step 'Finding installed Codex'
 $pkg = Get-CodexPackage

@@ -62,8 +62,10 @@ cd C:\Workspace\active\codex-desktop-rtl-patch
 git status --short
 ```
 
-Review local changes before running the installer. The installer should use the
-local `src\codex-rtl-patch.js` file and should not need to download it.
+Review local changes before running the installer. The installer requires the
+local `src\codex-rtl-patch.js` file and never downloads a replacement. If the
+file is missing, both DryRun and installation fail before copying or patching
+Codex.
 
 ### 2. Record the original Codex ASAR hash
 
@@ -90,6 +92,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -DryRun
 
 Expected behavior:
 
+- Verifies that the local `src\codex-rtl-patch.js` file exists.
 - Finds the installed `OpenAI.Codex` package.
 - Finds `npx.cmd` or `npx`.
 - Prints planned `robocopy`, ASAR extraction, injection, packing, and shortcut
@@ -97,10 +100,13 @@ Expected behavior:
 - Ends with `Dry run completed. No files were changed.`
 
 DryRun does not run `robocopy` or `npx`, download files, create the temporary
-ASAR directory, patch files, create a shortcut, or launch Codex.
+ASAR directory, patch files, create a shortcut, or launch Codex. It does require
+the local patch file so that the same preflight condition is checked before a
+real installation.
 
-Stop if the package or `app.asar` is not found, `npx` is missing, any planned
-path is unexpected, or the final no-change message is absent.
+Stop if the local patch file, package, or `app.asar` is not found, `npx` is
+missing, any planned path is unexpected, or the final no-change message is
+absent.
 
 ### 4. Close Codex
 
@@ -325,9 +331,8 @@ version.
 
 - Do not use `irm | iex` or execute installer content directly from a URL.
 - Review the local scripts and `src\codex-rtl-patch.js` before installation.
-- The current installer can download the patch from its configured upstream URL
-  only if the local patch file is missing. For this workflow, treat a missing
-  local patch file as a reason to stop and investigate.
+- The installer never downloads the RTL patch. A missing local
+  `src\codex-rtl-patch.js` file causes a clear, fail-closed error.
 - `npx --yes @electron/asar@4.2.0` may download and execute package code from
   the npm registry. A future hardening step should replace this with a
   lockfile-backed and integrity-verified local dependency workflow.

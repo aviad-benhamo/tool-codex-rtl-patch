@@ -248,7 +248,8 @@ Test-Path .\src\codex-rtl-patch.js
    - `robocopy` exit codes greater than 7.
    - `asar extract failed` or `asar pack failed`.
    - A missing `webview\index.html`.
-   - A missing local patch file or an unexpected remote download warning.
+   - A missing local patch file. The Windows installer does not download a
+     replacement and will fail closed.
 7. Do not retry installation until regular Codex works and the cause has been
    reviewed.
 
