@@ -24,12 +24,17 @@ $StatePath = Join-Path $InstallRoot 'patch-state.json'
 $DesktopPath = [Environment]::GetFolderPath('Desktop')
 $RtlShortcutPath = Join-Path $DesktopPath 'Codex RTL.lnk'
 $OriginalShortcutPath = Join-Path $DesktopPath 'Codex (Original).lnk'
+$RtlLauncherShortcutPath = Join-Path $DesktopPath 'Launch Codex RTL.lnk'
+$OriginalLauncherShortcutPath = Join-Path $DesktopPath 'Launch Codex Original.lnk'
 $ExplorerPath = Join-Path $env:WINDIR 'explorer.exe'
+$PowerShellPath = Join-Path $PSHOME 'powershell.exe'
 $OriginalAppUserModelId = 'OpenAI.Codex_2p2nqsd0c76g0!App'
 $OriginalShellTarget = "shell:AppsFolder\$OriginalAppUserModelId"
 $ScriptPath = $MyInvocation.MyCommand.Path
 $ThisDir = if ($ScriptPath) { Split-Path -Parent $ScriptPath } else { (Get-Location).Path }
 $PatchJsSource = Join-Path $ThisDir 'src\codex-rtl-patch.js'
+$LauncherScriptSource = Join-Path $ThisDir 'src\launch-codex.ps1'
+$LauncherScriptPath = Join-Path $InstallRoot 'launch-codex.ps1'
 
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -80,6 +85,25 @@ function Assert-LocalPatchFile {
     if (-not (Test-Path -LiteralPath $PatchJsSource -PathType Leaf)) {
         throw "Required local patch file was not found: $PatchJsSource. Restore src\codex-rtl-patch.js in this repository and rerun the installer. Remote downloads are disabled."
     }
+}
+
+function Assert-LocalLauncherScript {
+    if (-not (Test-Path -LiteralPath $LauncherScriptSource -PathType Leaf)) {
+        throw "Required launcher script was not found: $LauncherScriptSource"
+    }
+}
+
+function Install-LauncherScript {
+    Assert-LocalLauncherScript
+
+    if ($DryRun) {
+        Write-Host "DRY RUN copy launcher script to `"$LauncherScriptPath`""
+        return
+    }
+
+    New-Item -ItemType Directory -Force $InstallRoot | Out-Null
+    Copy-Item -LiteralPath $LauncherScriptSource -Destination $LauncherScriptPath -Force
+    Write-Ok "Installed launcher script: $LauncherScriptPath"
 }
 
 function Invoke-RobocopyMirror([string]$Source, [string]$Destination) {
@@ -267,6 +291,24 @@ function New-CodexShortcuts([string]$RtlAppDir, [string]$OriginalAppDir) {
         -WorkingDirectory (Split-Path -Parent $ExplorerPath) `
         -IconLocation $originalIcon `
         -Description 'Original Microsoft Store Codex Desktop'
+
+    $launcherBaseArguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherScriptPath`""
+
+    New-WindowsShortcut `
+        -ShortcutPath $RtlLauncherShortcutPath `
+        -TargetPath $PowerShellPath `
+        -Arguments "$launcherBaseArguments -Variant Rtl" `
+        -WorkingDirectory $InstallRoot `
+        -IconLocation $rtlIcon `
+        -Description 'Stop running Codex processes and launch Codex RTL'
+
+    New-WindowsShortcut `
+        -ShortcutPath $OriginalLauncherShortcutPath `
+        -TargetPath $PowerShellPath `
+        -Arguments "$launcherBaseArguments -Variant Original" `
+        -WorkingDirectory $InstallRoot `
+        -IconLocation $originalIcon `
+        -Description 'Stop running Codex processes and launch original Codex'
 }
 
 function Save-State([object]$Package, [string]$SourceAppDir) {
@@ -289,6 +331,8 @@ function Save-State([object]$Package, [string]$SourceAppDir) {
 Write-Step 'Checking local patch file'
 Assert-LocalPatchFile
 Write-Ok "Using local patch: $PatchJsSource"
+Assert-LocalLauncherScript
+Write-Ok "Using local launcher script: $LauncherScriptSource"
 
 Write-Step 'Finding installed Codex'
 $pkg = Get-CodexPackage
@@ -311,6 +355,7 @@ Write-Host "Target: $TargetAppDir"
 Invoke-RobocopyMirror $sourceAppDir $TargetAppDir
 
 Patch-Asar $TargetAppDir $npx
+Install-LauncherScript
 New-CodexShortcuts $TargetAppDir $sourceAppDir
 Save-State $pkg $sourceAppDir
 
@@ -319,8 +364,8 @@ if ($DryRun) {
     Write-Ok 'Dry run completed. No files were changed.'
 } else {
     Write-Ok 'Codex RTL is installed.'
-    Write-Host 'Desktop shortcuts: Codex RTL and Codex (Original)'
-    Write-Host "Close the regular Codex app before launching Codex RTL."
+    Write-Host 'Desktop shortcuts: Codex RTL, Codex (Original), Launch Codex RTL, and Launch Codex Original'
+    Write-Host 'Use the Launch shortcuts to switch variants without manually stopping Codex processes.'
 }
 
 if ($Launch -and -not $DryRun) {

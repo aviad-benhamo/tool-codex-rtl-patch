@@ -32,6 +32,8 @@ The expected paths are:
 ```text
 %LOCALAPPDATA%\OpenAI\CodexRtl
 <Desktop>\Codex RTL.lnk
+<Desktop>\Launch Codex RTL.lnk
+<Desktop>\Launch Codex Original.lnk
 ```
 
 4. Run the uninstaller:
@@ -51,13 +53,18 @@ Check that the generated copy and shortcut no longer exist:
 
 ```powershell
 $installRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
-$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Codex RTL.lnk'
+$desktop = [Environment]::GetFolderPath('Desktop')
+$shortcuts = @(
+    (Join-Path $desktop 'Codex RTL.lnk'),
+    (Join-Path $desktop 'Launch Codex RTL.lnk'),
+    (Join-Path $desktop 'Launch Codex Original.lnk')
+)
 
 Test-Path -LiteralPath $installRoot
-Test-Path -LiteralPath $shortcut
+$shortcuts | ForEach-Object { Test-Path -LiteralPath $_ }
 ```
 
-Both results should be `False`.
+All four results should be `False`.
 
 The Windows uninstaller removes:
 
@@ -65,6 +72,8 @@ The Windows uninstaller removes:
 %LOCALAPPDATA%\OpenAI\CodexRtl\app\
 %LOCALAPPDATA%\OpenAI\CodexRtl\patch-state.json
 <Desktop>\Codex RTL.lnk
+<Desktop>\Launch Codex RTL.lnk
+<Desktop>\Launch Codex Original.lnk
 ```
 
 It does not remove:
@@ -122,9 +131,16 @@ if (Test-Path -LiteralPath $installRoot) {
     Remove-Item -LiteralPath $installRoot -Recurse -Force
 }
 
-$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Codex RTL.lnk'
-if (Test-Path -LiteralPath $shortcut) {
-    Remove-Item -LiteralPath $shortcut -Force
+$desktop = [Environment]::GetFolderPath('Desktop')
+$shortcuts = @(
+    (Join-Path $desktop 'Codex RTL.lnk'),
+    (Join-Path $desktop 'Launch Codex RTL.lnk'),
+    (Join-Path $desktop 'Launch Codex Original.lnk')
+)
+foreach ($shortcut in $shortcuts) {
+    if (Test-Path -LiteralPath $shortcut) {
+        Remove-Item -LiteralPath $shortcut -Force
+    }
 }
 ```
 
@@ -164,7 +180,7 @@ After uninstalling the patched copy:
 1. Open Codex Desktop from the Windows Start menu, not from `Codex RTL`.
 2. Confirm the regular app launches.
 3. Confirm your account and expected workspace are available.
-4. Verify the `Codex RTL` desktop shortcut is gone.
+4. Verify the `Codex RTL` and both `Launch Codex ...` desktop shortcuts are gone.
 
 The patch does not create a separate Codex account or intentionally replace
 Codex user data. The official and patched executables may use the same existing

@@ -10,7 +10,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $InstallRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
-$ShortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Codex RTL.lnk'
+$DesktopPath = [Environment]::GetFolderPath('Desktop')
+$ShortcutPaths = @(
+    (Join-Path $DesktopPath 'Codex RTL.lnk'),
+    (Join-Path $DesktopPath 'Launch Codex RTL.lnk'),
+    (Join-Path $DesktopPath 'Launch Codex Original.lnk')
+)
 
 function Resolve-FullPath([string]$Path) {
     $full = [System.IO.Path]::GetFullPath($Path)
@@ -29,12 +34,14 @@ function Assert-UnderPath([string]$Child, [string]$Parent) {
 $expectedParent = Join-Path $env:LOCALAPPDATA 'OpenAI'
 Assert-UnderPath $InstallRoot $expectedParent
 
-if (Test-Path -LiteralPath $ShortcutPath) {
-    if ($DryRun) {
-        Write-Host "DRY RUN remove shortcut: $ShortcutPath"
-    } else {
-        Remove-Item -LiteralPath $ShortcutPath -Force
-        Write-Host "Removed shortcut: $ShortcutPath" -ForegroundColor Green
+foreach ($shortcutPath in $ShortcutPaths) {
+    if (Test-Path -LiteralPath $shortcutPath) {
+        if ($DryRun) {
+            Write-Host "DRY RUN remove shortcut: $shortcutPath"
+        } else {
+            Remove-Item -LiteralPath $shortcutPath -Force
+            Write-Host "Removed shortcut: $shortcutPath" -ForegroundColor Green
+        }
     }
 }
 
