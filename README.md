@@ -5,9 +5,9 @@ Private, unofficial RTL patch for Codex Desktop on Windows.
 The patch improves Hebrew, Arabic, and mixed right-to-left text while keeping
 code blocks, inline code, terminals, and editor-like surfaces left-to-right.
 
-This fork is maintained for personal Windows use. The macOS scripts currently
-remain in the repository as legacy upstream files, but they are not part of the
-supported workflow documented here.
+This private fork currently supports Windows only. The macOS scripts remain in
+the repository as deprecated upstream files for reference, but they are
+unsupported and should not be used for this fork.
 
 ## Safety Model
 
@@ -37,6 +37,22 @@ the variant that was already running.
 
 Always install from a reviewed local clone. Do not pipe remote scripts into
 PowerShell with `irm | iex`.
+
+## Daily Usage
+
+- Use `Codex RTL` as the daily launcher.
+- Keep `Codex (Original)` for Microsoft Store updates, troubleshooting, and
+  comparison with the unpatched application.
+- When switching between variants, use the matching `Launch Codex ...`
+  shortcut so the already-running Codex process is stopped first.
+- After `Codex (Original)` updates, confirm it still works, then rerun
+  `install.ps1` from the reviewed local clone to rebuild and re-patch the
+  separate RTL copy.
+
+There is no supported macOS or automatic patching workflow in this private
+fork. Do not run `install.sh`, `uninstall.sh`, `check-macos.sh`, or the scripts
+under `autopatch\`; they are retained only as deprecated upstream reference
+files.
 
 ## What the Patch Does
 

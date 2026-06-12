@@ -1,33 +1,14 @@
-# Codex RTL — macOS auto-patch agent
+# Deprecated macOS Auto-Patch Files
 
-Codex auto-updates overwrite `app.asar` and revert the RTL patch. This
-LaunchAgent watches the app and re-applies the patch — the macOS analog of the
-Windows scheduled-task watcher.
+This private fork currently supports Windows only. The files in this directory
+are retained from upstream for reference and are not a supported installation
+or update mechanism.
 
-```bash
-cd autopatch
-chmod +x install-autopatch.sh uninstall-autopatch.sh
-./install-autopatch.sh      # install + load the agent
-./uninstall-autopatch.sh    # remove it
-```
+Do not install or run this LaunchAgent for daily use. In particular, this fork
+does not recommend granting Full Disk Access to `/bin/bash` or automatically
+modifying the Codex application after updates.
 
-A per-user LaunchAgent (`com.aviz85.codex-rtl-autopatch`) runs
-`../install.sh --if-needed --no-launch --notify` on **WatchPaths** (the instant
-an update replaces `app.asar`) and at login (**RunAtLoad**). `--if-needed` makes
-it a no-op when already patched. Logs: `~/Library/Logs/codex-rtl-patch/autopatch.log`.
-
-## The honest status: two modes
-
-macOS 14+ ("App Management" protection) blocks a background LaunchAgent from
-modifying apps in `/Applications`. **Out of the box this agent only DETECTS
-updates and notifies you** (verified). It cannot re-write the app yet.
-
-- **Mode A — semi-automatic (default):** after a Codex update you get a
-  notification; run `../install.sh` once from Terminal to re-apply.
-- **Mode B — fully automatic (one-time grant):** give `/bin/bash` Full Disk
-  Access (System Settings → Privacy & Security → Full Disk Access → + →
-  Cmd+Shift+G → `/bin/bash`). Then the agent re-applies on its own. This mode is
-  designed but **not yet end-to-end verified** — confirm after a real update.
-
-Granting FDA to `/bin/bash` is broad (covers any shell script); if you'd rather
-not, stay on Mode A.
+For the supported Windows workflow, use the reviewed local clone and follow
+the instructions in [`../README.md`](../README.md). After the official
+`Codex (Original)` application updates, rerun `install.ps1` locally to rebuild
+the separate `Codex RTL` copy.
