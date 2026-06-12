@@ -20,8 +20,12 @@ It copies the installed Codex application to:
 %LOCALAPPDATA%\OpenAI\CodexRtl\app
 ```
 
-It then patches only the copied `resources\app.asar` and creates a separate
-desktop shortcut named `Codex RTL`.
+It then patches only the copied `resources\app.asar` and creates two explicit
+desktop shortcuts:
+
+- `Codex RTL.lnk` launches the patched copy under `%LOCALAPPDATA%`.
+- `Codex (Original).lnk` launches the official Store app through its AppsFolder
+  AppUserModelID.
 
 Always install from a reviewed local clone. Do not pipe remote scripts into
 PowerShell with `irm | iex`.
@@ -96,7 +100,7 @@ Expected behavior:
 - Finds the installed `OpenAI.Codex` package.
 - Finds `npx.cmd` or `npx`.
 - Prints planned `robocopy`, ASAR extraction, injection, packing, and shortcut
-  actions.
+  actions, including both shortcut targets.
 - Ends with `Dry run completed. No files were changed.`
 
 DryRun does not run `robocopy` or `npx`, download files, create the temporary
@@ -128,7 +132,7 @@ A successful installation ends with:
 
 ```text
 OK  Codex RTL is installed.
-Launch it from the desktop shortcut: Codex RTL
+Desktop shortcuts: Codex RTL and Codex (Original)
 ```
 
 ## Verify the Installation
@@ -137,30 +141,72 @@ Launch it from the desktop shortcut: Codex RTL
 
 ```powershell
 $installRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
-$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Codex RTL.lnk'
+$desktop = [Environment]::GetFolderPath('Desktop')
+$rtlShortcut = Join-Path $desktop 'Codex RTL.lnk'
+$originalShortcut = Join-Path $desktop 'Codex (Original).lnk'
 
 Test-Path (Join-Path $installRoot 'app\Codex.exe')
 Test-Path (Join-Path $installRoot 'app\resources\app.asar')
 Test-Path (Join-Path $installRoot 'patch-state.json')
-Test-Path $shortcut
+Test-Path $rtlShortcut
+Test-Path $originalShortcut
 Get-Content (Join-Path $installRoot 'patch-state.json')
 ```
 
-All four `Test-Path` commands should return `True`. The state file should name
+All five `Test-Path` commands should return `True`. The state file should name
 the official package version and show the source and target directories.
 
-Verify the shortcut target:
+Verify both shortcut targets:
 
 ```powershell
 $shell = New-Object -ComObject WScript.Shell
-$link = $shell.CreateShortcut($shortcut)
-$link.TargetPath
+$rtlLink = $shell.CreateShortcut($rtlShortcut)
+$originalLink = $shell.CreateShortcut($originalShortcut)
+
+[pscustomobject]@{
+    Shortcut = 'Codex RTL'
+    Target = $rtlLink.TargetPath
+    Arguments = $rtlLink.Arguments
+}
+[pscustomobject]@{
+    Shortcut = 'Codex (Original)'
+    Target = $originalLink.TargetPath
+    Arguments = $originalLink.Arguments
+}
 ```
 
-The target should be:
+The RTL target should be:
 
 ```text
 %LOCALAPPDATA%\OpenAI\CodexRtl\app\Codex.exe
+```
+
+The original target should be `%WINDIR%\explorer.exe`, with these arguments:
+
+```text
+shell:AppsFolder\OpenAI.Codex_2p2nqsd0c76g0!App
+```
+
+### Verify which Codex version is running
+
+Close every Codex window, launch one shortcut, and run:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "name='Codex.exe'" |
+    Select-Object ProcessId, ExecutablePath, CommandLine
+```
+
+`Codex RTL` should show an `ExecutablePath` under:
+
+```text
+C:\Users\<you>\AppData\Local\OpenAI\CodexRtl\
+```
+
+Close it before testing the other shortcut. `Codex (Original)` should show an
+`ExecutablePath` under:
+
+```text
+C:\Program Files\WindowsApps\OpenAI.Codex_<version>_x64__2p2nqsd0c76g0\app\
 ```
 
 ### Verify the official Codex installation was not modified
@@ -221,6 +267,7 @@ Persistent files:
 %LOCALAPPDATA%\OpenAI\CodexRtl\app\
 %LOCALAPPDATA%\OpenAI\CodexRtl\patch-state.json
 <Desktop>\Codex RTL.lnk
+<Desktop>\Codex (Original).lnk
 ```
 
 Temporary or indirect files:
@@ -315,9 +362,9 @@ Recovery never requires editing or deleting files under `WindowsApps`.
 ## After Codex Desktop Updates
 
 The patched copy does not update automatically with the official package.
-After Codex Desktop updates:
+Update the original app through the Microsoft Store, then:
 
-1. Confirm the regular Codex application works.
+1. Launch `Codex (Original)` and confirm the updated official app works.
 2. Open the local repository and review any new local changes.
 3. Run DryRun:
 
@@ -333,7 +380,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 The installer mirrors the latest official app into the local copy and reapplies
-the patch. Repeat the artifact, original-hash, launch, and RTL checks above.
+the patch. It also refreshes both desktop shortcuts. Repeat the artifact,
+original-hash, launch-path, and RTL checks above.
 
 Codex UI internals may change between releases. A successful installer run does
 not guarantee that the injected patch remains compatible with every new Codex

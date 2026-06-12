@@ -5,7 +5,8 @@
 .DESCRIPTION
   This installer does not modify the Microsoft Store/MSIX package under
   WindowsApps. It copies the Codex app folder to LocalAppData, patches the
-  copied app.asar, and creates a desktop shortcut named "Codex RTL".
+  copied app.asar, and creates separate desktop shortcuts for the patched RTL
+  copy and the original Microsoft Store application.
 #>
 param(
     [switch]$DryRun,
@@ -20,7 +21,12 @@ $AsarPackage = '@electron/asar@4.2.0'
 $InstallRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
 $TargetAppDir = Join-Path $InstallRoot 'app'
 $StatePath = Join-Path $InstallRoot 'patch-state.json'
-$ShortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Codex RTL.lnk'
+$DesktopPath = [Environment]::GetFolderPath('Desktop')
+$RtlShortcutPath = Join-Path $DesktopPath 'Codex RTL.lnk'
+$OriginalShortcutPath = Join-Path $DesktopPath 'Codex (Original).lnk'
+$ExplorerPath = Join-Path $env:WINDIR 'explorer.exe'
+$OriginalAppUserModelId = 'OpenAI.Codex_2p2nqsd0c76g0!App'
+$OriginalShellTarget = "shell:AppsFolder\$OriginalAppUserModelId"
 $ScriptPath = $MyInvocation.MyCommand.Path
 $ThisDir = if ($ScriptPath) { Split-Path -Parent $ScriptPath } else { (Get-Location).Path }
 $PatchJsSource = Join-Path $ThisDir 'src\codex-rtl-patch.js'
@@ -205,28 +211,62 @@ function Patch-Asar([string]$AppDir, [string]$Npx) {
     }
 }
 
-function New-CodexShortcut([string]$AppDir) {
-    $exe = Join-Path $AppDir 'Codex.exe'
+function New-WindowsShortcut {
+    param(
+        [Parameter(Mandatory = $true)][string]$ShortcutPath,
+        [Parameter(Mandatory = $true)][string]$TargetPath,
+        [string]$Arguments = '',
+        [string]$WorkingDirectory = '',
+        [string]$IconLocation = '',
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
     if ($DryRun) {
-        Write-Host "DRY RUN create shortcut $ShortcutPath -> $exe"
+        $argumentSummary = if ($Arguments) { " $Arguments" } else { '' }
+        Write-Host "DRY RUN create shortcut `"$ShortcutPath`" -> `"$TargetPath`"$argumentSummary"
         return
     }
 
-    if (-not (Test-Path -LiteralPath $exe)) {
-        throw "Patched Codex.exe was not found: $exe"
+    if (-not (Test-Path -LiteralPath $TargetPath -PathType Leaf)) {
+        throw "Shortcut target was not found: $TargetPath"
     }
 
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($ShortcutPath)
-    $shortcut.TargetPath = $exe
-    $shortcut.WorkingDirectory = $AppDir
-    $icon = Join-Path $AppDir 'resources\icon.ico'
-    if (Test-Path -LiteralPath $icon) {
-        $shortcut.IconLocation = $icon
+    $shortcut.TargetPath = $TargetPath
+    if ($Arguments) {
+        $shortcut.Arguments = $Arguments
     }
-    $shortcut.Description = 'Codex Desktop with local RTL patch'
+    if ($WorkingDirectory) {
+        $shortcut.WorkingDirectory = $WorkingDirectory
+    }
+    if ($IconLocation -and (Test-Path -LiteralPath $IconLocation -PathType Leaf)) {
+        $shortcut.IconLocation = $IconLocation
+    }
+    $shortcut.Description = $Description
     $shortcut.Save()
     Write-Ok "Created shortcut: $ShortcutPath"
+}
+
+function New-CodexShortcuts([string]$RtlAppDir, [string]$OriginalAppDir) {
+    $rtlExe = Join-Path $RtlAppDir 'Codex.exe'
+    $rtlIcon = Join-Path $RtlAppDir 'resources\icon.ico'
+    $originalIcon = Join-Path $OriginalAppDir 'resources\icon.ico'
+
+    New-WindowsShortcut `
+        -ShortcutPath $RtlShortcutPath `
+        -TargetPath $rtlExe `
+        -WorkingDirectory $RtlAppDir `
+        -IconLocation $rtlIcon `
+        -Description 'Codex Desktop with local RTL patch'
+
+    New-WindowsShortcut `
+        -ShortcutPath $OriginalShortcutPath `
+        -TargetPath $ExplorerPath `
+        -Arguments $OriginalShellTarget `
+        -WorkingDirectory (Split-Path -Parent $ExplorerPath) `
+        -IconLocation $originalIcon `
+        -Description 'Original Microsoft Store Codex Desktop'
 }
 
 function Save-State([object]$Package, [string]$SourceAppDir) {
@@ -271,7 +311,7 @@ Write-Host "Target: $TargetAppDir"
 Invoke-RobocopyMirror $sourceAppDir $TargetAppDir
 
 Patch-Asar $TargetAppDir $npx
-New-CodexShortcut $TargetAppDir
+New-CodexShortcuts $TargetAppDir $sourceAppDir
 Save-State $pkg $sourceAppDir
 
 Write-Step 'Done'
@@ -279,7 +319,7 @@ if ($DryRun) {
     Write-Ok 'Dry run completed. No files were changed.'
 } else {
     Write-Ok 'Codex RTL is installed.'
-    Write-Host "Launch it from the desktop shortcut: Codex RTL"
+    Write-Host 'Desktop shortcuts: Codex RTL and Codex (Original)'
     Write-Host "Close the regular Codex app before launching Codex RTL."
 }
 
