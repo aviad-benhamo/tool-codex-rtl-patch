@@ -194,8 +194,20 @@ the installed MSIX package; the patched path should be under LocalAppData.
 3. Confirm Codex starts normally and can access the expected account/workspace.
 4. Type a Hebrew or Arabic sentence in the composer and confirm it aligns RTL.
 5. Type an English sentence and confirm it aligns LTR.
-6. Open a response containing code and confirm code blocks remain LTR.
-7. Test a mixed Hebrew/English paragraph.
+6. Type an English-first mixed sentence such as `Hello שלום` and confirm the
+   composer remains LTR.
+7. Type a Hebrew-first mixed sentence such as `שלום hello` and confirm the
+   composer becomes RTL.
+8. Open a response containing code and confirm code blocks and inline code
+   remain LTR.
+9. Confirm message rows, toolbars, buttons, links, badges, and list containers
+   remain in their normal LTR layout.
+
+Run the lightweight direction tests from the repository:
+
+```powershell
+node .\tests\rtl-direction.test.js
+```
 
 If the regular Codex instance was already running, Electron may reuse it.
 Close every Codex window and launch `Codex RTL` again before concluding that
