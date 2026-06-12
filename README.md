@@ -243,6 +243,9 @@ installed and unchanged.
 
 ## Recovery
 
+For the full incident and recovery runbook, see
+[`docs/RECOVERY.md`](docs/RECOVERY.md).
+
 If `Codex RTL` fails to start, crashes, or behaves incorrectly:
 
 1. Close all Codex windows.
