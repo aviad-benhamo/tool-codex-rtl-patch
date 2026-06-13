@@ -47,9 +47,13 @@ assert.equal(firstStrong("Hello שלום"), "ltr", "firstStrong remains literal"
 assert.equal(firstStrong("שלום hello"), "rtl", "firstStrong detects RTL first");
 
 assert.match(source, /var INPUT_SEL = "\.ProseMirror";/);
-assert.doesNotMatch(source, /var LEAF_SEL/);
+assert.match(source, /var LEAF_SEL = "div, span";/);
 assert.doesNotMatch(source, /qsa\(root, "ul, ol"\)/);
-assert.doesNotMatch(source, /processLeafContainers/);
+assert.match(source, /processLeafContainers\(target\)/);
+assert.match(
+  source,
+  /el\.parentElement\.closest\("\[" \+ MANAGED_FLAG \+ "\]"\)/
+);
 assert.doesNotMatch(
   source,
   /p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, summary, label/
@@ -84,7 +88,7 @@ applyDir(managed, "rtl", "right");
 assert.equal(managed.getAttribute("dir"), "rtl");
 assert.equal(managed.getAttribute("data-codex-rtl-managed"), "1");
 assert.equal(managed.getAttribute("data-codex-rtl-plaintext"), "1");
-assert.equal(managed.style.unicodeBidi, "plaintext");
+assert.equal(managed.style.unicodeBidi, "isolate");
 
 applyDir(managed, "ltr", "left");
 assert.equal(managed.getAttribute("dir"), "ltr");
@@ -161,5 +165,11 @@ assert.equal(
   ),
   "rtl"
 );
+
+assert.match(
+  source,
+  /#root \[data-codex-rtl-plaintext=\\"1\\"\]\{unicode-bidi:isolate!important/
+);
+assert.doesNotMatch(source, /unicode-bidi:plaintext/);
 
 console.log(`RTL direction tests passed (${cases.length} cases).`);

@@ -15,6 +15,7 @@
     "pre, code, kbd, samp, .cm-editor, .monaco-editor, .xterm, [class*=\"language-\"]";
   var TEXT_SEL =
     "p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, summary, dt, dd";
+  var LEAF_SEL = "div, span";
 
   function isRTLChar(ch) {
     var code = ch.charCodeAt(0);
@@ -78,6 +79,12 @@
     return !!(el && el.closest && el.closest(INPUT_SEL));
   }
 
+  function hasBlockChild(el) {
+    return !!el.querySelector(
+      "p, div, ul, ol, li, h1, h2, h3, h4, h5, h6, pre, table, blockquote"
+    );
+  }
+
   function clearDir(el) {
     if (
       !el.hasAttribute(MANAGED_FLAG) &&
@@ -105,7 +112,7 @@
     el.style.textAlign = align || "start";
     if (dir === "rtl") {
       el.setAttribute(RTL_SPLIT_FLAG, "1");
-      el.style.unicodeBidi = "plaintext";
+      el.style.unicodeBidi = "isolate";
     }
   }
 
@@ -121,6 +128,19 @@
   function processText(root) {
     qsa(root, TEXT_SEL).forEach(function (el) {
       if (isEditable(el) || el.closest(CODE_SEL)) return;
+      var dir = detectElementDir(el);
+      if (dir === "rtl") applyDir(el, "rtl");
+      else clearDir(el);
+    });
+  }
+
+  function processLeafContainers(root) {
+    qsa(root, LEAF_SEL).forEach(function (el) {
+      if (isEditable(el) || el.closest(CODE_SEL)) return;
+      var managedAncestor = el.parentElement &&
+        el.parentElement.closest("[" + MANAGED_FLAG + "]");
+      if (managedAncestor) return;
+      if (hasBlockChild(el)) return;
       var dir = detectElementDir(el);
       if (dir === "rtl") applyDir(el, "rtl");
       else clearDir(el);
@@ -151,8 +171,8 @@
       "#root :where(pre,code,kbd,samp,.cm-editor,.monaco-editor,.xterm,[class*=\"language-\"]){direction:ltr!important;text-align:left!important}",
       "#root code{unicode-bidi:isolate!important}",
       "#root pre{unicode-bidi:embed!important}",
-      "#root .ProseMirror[data-codex-rtl-managed=\"1\"]{unicode-bidi:plaintext!important}",
-      "#root [data-codex-rtl-plaintext=\"1\"]{unicode-bidi:plaintext!important;text-align:start!important}"
+      "#root .ProseMirror[data-codex-rtl-managed=\"1\"]{unicode-bidi:isolate!important}",
+      "#root [data-codex-rtl-plaintext=\"1\"]{unicode-bidi:isolate!important;text-align:start!important}"
     ].join("");
     document.head.appendChild(style);
   }
@@ -160,6 +180,7 @@
   function processAll(root) {
     var target = root || document.body || document;
     processText(target);
+    processLeafContainers(target);
     processInputs(target);
     forceCodeLTR(target);
   }
