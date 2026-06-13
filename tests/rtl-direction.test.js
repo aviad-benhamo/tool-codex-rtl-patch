@@ -27,9 +27,9 @@ const { firstStrong, detectTextDir, detectElementDir, clearDir, applyDir } =
 const cases = [
   ["Hebrew first", "שלום hello", "rtl"],
   ["Arabic first", "مرحبا hello", "rtl"],
-  ["Latin first", "Hello שלום", "ltr"],
-  ["Latin path first", "C:\\Workspace\\file.js שלום", "ltr"],
-  ["Latin URL first", "https://example.com שלום", "ltr"],
+  ["Latin first with Hebrew", "Hello שלום", "rtl"],
+  ["Latin path first with Hebrew", "C:\\Workspace\\file.js שלום", "rtl"],
+  ["Latin URL first with Hebrew", "https://example.com שלום", "rtl"],
   ["Hebrew after numbers", "123 שלום", "rtl"],
   ["Latin after numbers", "123 hello", "ltr"],
   ["English only", "English only", "ltr"],
@@ -40,9 +40,11 @@ const cases = [
 ];
 
 for (const [name, text, expected] of cases) {
-  assert.equal(firstStrong(text), expected, `${name}: firstStrong`);
   assert.equal(detectTextDir(text), expected, `${name}: detectTextDir`);
 }
+
+assert.equal(firstStrong("Hello שלום"), "ltr", "firstStrong remains literal");
+assert.equal(firstStrong("שלום hello"), "rtl", "firstStrong detects RTL first");
 
 assert.match(source, /var INPUT_SEL = "\.ProseMirror";/);
 assert.doesNotMatch(source, /var LEAF_SEL/);
@@ -136,7 +138,7 @@ function elementNode(children) {
 
 assert.equal(
   detectElementDir(elementNode([textNode("Hello שלום")])),
-  "ltr"
+  "rtl"
 );
 assert.equal(
   detectElementDir(elementNode([textNode("שלום hello")])),
@@ -145,6 +147,17 @@ assert.equal(
 assert.equal(
   detectElementDir(
     elementNode([codeNode("const value = 1;"), textNode(" שלום")])
+  ),
+  "rtl"
+);
+assert.equal(
+  detectElementDir(
+    elementNode([
+      textNode("function "),
+      codeNode("regular"),
+      textNode(" לעומת "),
+      codeNode("arrow function")
+    ])
   ),
   "rtl"
 );

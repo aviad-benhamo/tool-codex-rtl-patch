@@ -39,6 +39,9 @@
 
   function detectTextDir(text) {
     if (!text || !text.trim()) return null;
+    for (var i = 0; i < text.length; i += 1) {
+      if (isRTLChar(text[i])) return "rtl";
+    }
     return firstStrong(text);
   }
 
