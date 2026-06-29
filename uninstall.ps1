@@ -1,6 +1,6 @@
 <# 
 .SYNOPSIS
-  Removes the local Codex RTL copy and desktop shortcut.
+  Removes the local Codex RTL copy and desktop shortcuts.
 #>
 param(
     [switch]$DryRun
@@ -13,6 +13,7 @@ $InstallRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
 $DesktopPath = [Environment]::GetFolderPath('Desktop')
 $ShortcutPaths = @(
     (Join-Path $DesktopPath 'Codex RTL.lnk'),
+    (Join-Path $DesktopPath 'Codex (Original).lnk'),
     (Join-Path $DesktopPath 'Launch Codex RTL.lnk'),
     (Join-Path $DesktopPath 'Launch Codex Original.lnk')
 )

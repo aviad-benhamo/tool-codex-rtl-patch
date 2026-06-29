@@ -32,8 +32,7 @@ The expected paths are:
 ```text
 %LOCALAPPDATA%\OpenAI\CodexRtl
 <Desktop>\Codex RTL.lnk
-<Desktop>\Launch Codex RTL.lnk
-<Desktop>\Launch Codex Original.lnk
+<Desktop>\Codex (Original).lnk
 ```
 
 4. Run the uninstaller:
@@ -56,6 +55,7 @@ $installRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
 $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcuts = @(
     (Join-Path $desktop 'Codex RTL.lnk'),
+    (Join-Path $desktop 'Codex (Original).lnk'),
     (Join-Path $desktop 'Launch Codex RTL.lnk'),
     (Join-Path $desktop 'Launch Codex Original.lnk')
 )
@@ -72,9 +72,11 @@ The Windows uninstaller removes:
 %LOCALAPPDATA%\OpenAI\CodexRtl\app\
 %LOCALAPPDATA%\OpenAI\CodexRtl\patch-state.json
 <Desktop>\Codex RTL.lnk
-<Desktop>\Launch Codex RTL.lnk
-<Desktop>\Launch Codex Original.lnk
+<Desktop>\Codex (Original).lnk
 ```
+
+It also removes older duplicate `Launch Codex ...` shortcuts if they are still
+present from a previous install.
 
 It does not remove:
 
@@ -134,6 +136,7 @@ if (Test-Path -LiteralPath $installRoot) {
 $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcuts = @(
     (Join-Path $desktop 'Codex RTL.lnk'),
+    (Join-Path $desktop 'Codex (Original).lnk'),
     (Join-Path $desktop 'Launch Codex RTL.lnk'),
     (Join-Path $desktop 'Launch Codex Original.lnk')
 )
@@ -180,7 +183,7 @@ After uninstalling the patched copy:
 1. Open Codex Desktop from the Windows Start menu, not from `Codex RTL`.
 2. Confirm the regular app launches.
 3. Confirm your account and expected workspace are available.
-4. Verify the `Codex RTL` and both `Launch Codex ...` desktop shortcuts are gone.
+4. Verify the `Codex RTL` and `Codex (Original)` desktop shortcuts are gone.
 
 The patch does not create a separate Codex account or intentionally replace
 Codex user data. The official and patched executables may use the same existing
@@ -271,8 +274,10 @@ Test-Path .\src\codex-rtl-patch.js
 
 ## Reapply After a Codex Update
 
-The patched local copy is not updated automatically. After the official Codex
-Desktop package updates:
+The patched local copy is not updated automatically. The guarded `Codex RTL`
+launcher compares the current official package version with
+`%LOCALAPPDATA%\OpenAI\CodexRtl\patch-state.json` and warns before opening a
+stale RTL copy. After the official Codex Desktop package updates:
 
 1. Launch regular Codex and confirm the update works.
 2. Record the new official package version and ASAR hash:
@@ -311,6 +316,9 @@ $beforeHash -eq $afterHash
 
 8. Launch `Codex RTL` and retest Hebrew/Arabic input, English input, mixed text,
    and LTR code blocks.
+
+The installer refreshes `patch-state.json` and the desktop shortcuts so future
+launches can detect the next official app update.
 
 Codex UI internals can change after an update. If installation succeeds but the
 UI is broken, uninstall the patched copy and continue using regular Codex until

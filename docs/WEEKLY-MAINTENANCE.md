@@ -6,6 +6,9 @@ This guide describes the weekly maintenance flow for keeping the patched Codex R
 
 Use `Codex RTL` for daily work, but periodically open the official `Codex (Original)` app to allow updates.
 After the original app updates, rebuild the RTL copy from the latest official version.
+The `Codex RTL` launcher checks the official package version against
+`%LOCALAPPDATA%\OpenAI\CodexRtl\patch-state.json` and warns if the RTL copy was
+built from an older version.
 
 ## Recommended Frequency
 
@@ -18,12 +21,8 @@ There should be two main launchers on the Desktop:
 * `Codex RTL` — daily-use patched RTL version.
 * `Codex (Original)` — official Codex app used for updates and comparison.
 
-If using the convenience launchers, use:
-
-* `Launch Codex RTL`
-* `Launch Codex Original`
-
-These close any running Codex process before opening the selected version.
+Both shortcuts close any running Codex process before opening the selected
+version. Use them when switching between original and RTL variants.
 
 ---
 
@@ -46,7 +45,7 @@ It is safe if this returns an error saying no process was found.
 Open the Desktop shortcut:
 
 ```text
-Launch Codex Original
+Codex (Original)
 ```
 
 Let Codex load normally.
@@ -130,6 +129,8 @@ This copies the latest official Codex app into:
 ```
 
 and injects the RTL patch into the copied app.
+It also refreshes `patch-state.json` so the guarded launcher can detect future
+official app updates.
 
 The original Codex installation is not modified.
 
@@ -141,12 +142,6 @@ Open:
 
 ```text
 Codex RTL
-```
-
-or:
-
-```text
-Launch Codex RTL
 ```
 
 ---
@@ -221,12 +216,6 @@ Open:
 Codex (Original)
 ```
 
-or:
-
-```text
-Launch Codex Original
-```
-
 This bypasses the RTL copy.
 
 ### Option 2: Rebuild RTL
@@ -254,4 +243,4 @@ Then continue using `Codex (Original)`.
 * The RTL app is a copied and patched version of the official app.
 * The official Windows Store app remains the source of truth.
 * After every official Codex update, rerun `install.ps1` to refresh the RTL copy.
-* Do not run Original and RTL at the same time; close Codex first or use the launcher shortcuts.
+* Do not run Original and RTL at the same time; use the desktop shortcuts so the launcher closes the previous process first.

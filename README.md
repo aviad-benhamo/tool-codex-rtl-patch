@@ -20,20 +20,17 @@ It copies the installed Codex application to:
 %LOCALAPPDATA%\OpenAI\CodexRtl\app
 ```
 
-It then patches only the copied `resources\app.asar` and creates four explicit
+It then patches only the copied `resources\app.asar` and creates two explicit
 desktop shortcuts:
 
-- `Codex RTL.lnk` launches the patched copy under `%LOCALAPPDATA%`.
-- `Codex (Original).lnk` launches the official Store app through its AppsFolder
-  AppUserModelID.
-- `Launch Codex RTL.lnk` stops any running `Codex.exe` processes, waits two
-  seconds, and launches the patched copy.
-- `Launch Codex Original.lnk` stops any running `Codex.exe` processes, waits
-  two seconds, and launches the official Store app.
+- `Codex RTL.lnk` runs the guarded launcher and then opens the patched copy
+  under `%LOCALAPPDATA%`.
+- `Codex (Original).lnk` runs the same launcher and then opens the official
+  Store app through its AppsFolder AppUserModelID.
 
-The original two shortcuts are preserved. Use the `Launch Codex ...` shortcuts
-when switching variants so Electron's single-instance process cannot reopen
-the variant that was already running.
+Both shortcuts stop existing `Codex.exe` processes before launching the chosen
+variant so Electron's single-instance process cannot reopen the variant that
+was already running.
 
 Always install from a reviewed local clone. Do not pipe remote scripts into
 PowerShell with `irm | iex`.
@@ -43,8 +40,11 @@ PowerShell with `irm | iex`.
 - Use `Codex RTL` as the daily launcher.
 - Keep `Codex (Original)` for Microsoft Store updates, troubleshooting, and
   comparison with the unpatched application.
-- When switching between variants, use the matching `Launch Codex ...`
-  shortcut so the already-running Codex process is stopped first.
+- When `Codex RTL` detects that the official Store app is newer than the
+  recorded RTL source version, it warns before launching and offers to rebuild
+  from the reviewed local clone recorded during installation.
+- When switching between variants, use `Codex RTL` or `Codex (Original)`.
+  Both shortcuts stop the already-running Codex process first.
 - After `Codex (Original)` updates, confirm it still works, then rerun
   `install.ps1` from the reviewed local clone to rebuild and re-patch the
   separate RTL copy.
@@ -124,7 +124,8 @@ Expected behavior:
 - Finds the installed `OpenAI.Codex` package.
 - Finds `npx.cmd` or `npx`.
 - Prints planned `robocopy`, ASAR extraction, injection, packing, launcher
-  script copy, and shortcut actions, including all four shortcut targets.
+  script copy, shortcut actions, and cleanup of old duplicate `Launch ...`
+  shortcuts if present.
 - Ends with `Dry run completed. No files were changed.`
 
 DryRun does not run `robocopy` or `npx`, download files, create the temporary
@@ -156,7 +157,7 @@ A successful installation ends with:
 
 ```text
 OK  Codex RTL is installed.
-Desktop shortcuts: Codex RTL, Codex (Original), Launch Codex RTL, and Launch Codex Original
+Desktop shortcuts: Codex RTL and Codex (Original)
 ```
 
 ## Verify the Installation
@@ -168,8 +169,6 @@ $installRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
 $desktop = [Environment]::GetFolderPath('Desktop')
 $rtlShortcut = Join-Path $desktop 'Codex RTL.lnk'
 $originalShortcut = Join-Path $desktop 'Codex (Original).lnk'
-$rtlLauncherShortcut = Join-Path $desktop 'Launch Codex RTL.lnk'
-$originalLauncherShortcut = Join-Path $desktop 'Launch Codex Original.lnk'
 
 Test-Path (Join-Path $installRoot 'app\Codex.exe')
 Test-Path (Join-Path $installRoot 'app\resources\app.asar')
@@ -177,62 +176,53 @@ Test-Path (Join-Path $installRoot 'patch-state.json')
 Test-Path (Join-Path $installRoot 'launch-codex.ps1')
 Test-Path $rtlShortcut
 Test-Path $originalShortcut
-Test-Path $rtlLauncherShortcut
-Test-Path $originalLauncherShortcut
 Get-Content (Join-Path $installRoot 'patch-state.json')
 ```
 
-All eight `Test-Path` commands should return `True`. The state file should name
-the official package version and show the source and target directories.
+All six `Test-Path` commands should return `True`. The state file should name
+the official package version, the source and target directories, and the local
+installer path used by the launcher rebuild action.
 
-Verify all four shortcut targets:
+Verify both shortcut targets:
 
 ```powershell
 $shell = New-Object -ComObject WScript.Shell
 $rtlLink = $shell.CreateShortcut($rtlShortcut)
 $originalLink = $shell.CreateShortcut($originalShortcut)
-$rtlLauncherLink = $shell.CreateShortcut($rtlLauncherShortcut)
-$originalLauncherLink = $shell.CreateShortcut($originalLauncherShortcut)
 
 @(
     [pscustomobject]@{ Shortcut = 'Codex RTL'; Link = $rtlLink }
     [pscustomobject]@{ Shortcut = 'Codex (Original)'; Link = $originalLink }
-    [pscustomobject]@{ Shortcut = 'Launch Codex RTL'; Link = $rtlLauncherLink }
-    [pscustomobject]@{ Shortcut = 'Launch Codex Original'; Link = $originalLauncherLink }
 ) | Select-Object Shortcut,
     @{ Name = 'Target'; Expression = { $_.Link.TargetPath } },
     @{ Name = 'Arguments'; Expression = { $_.Link.Arguments } }
 ```
 
-The RTL target should be:
+Both shortcuts should target Windows PowerShell. `Codex RTL` should run:
 
 ```text
-%LOCALAPPDATA%\OpenAI\CodexRtl\app\Codex.exe
+%LOCALAPPDATA%\OpenAI\CodexRtl\launch-codex.ps1 -Variant Rtl
 ```
 
-The original target should be `%WINDIR%\explorer.exe`, with these arguments:
+`Codex (Original)` should run:
 
 ```text
-shell:AppsFolder\OpenAI.Codex_2p2nqsd0c76g0!App
+%LOCALAPPDATA%\OpenAI\CodexRtl\launch-codex.ps1 -Variant Original
 ```
-
-Both launcher shortcuts should target Windows PowerShell. Their arguments
-should run `%LOCALAPPDATA%\OpenAI\CodexRtl\launch-codex.ps1` with
-`-Variant Rtl` or `-Variant Original`.
 
 ### Switch between Codex variants
 
-1. Open `Launch Codex RTL` and verify the RTL executable starts.
-2. Open `Launch Codex Original`.
+1. Open `Codex RTL` and verify the RTL executable starts.
+2. Open `Codex (Original)`.
 3. Verify the existing Codex processes terminate and original Codex starts.
 4. Repeat in the opposite direction.
 
-The launchers run `taskkill /IM Codex.exe /F`, ignore the error when no process
-exists, wait two seconds, and then start the selected variant.
+Both desktop shortcuts run `taskkill /IM Codex.exe /F`, ignore the error when no
+process exists, wait two seconds, and then start the selected variant.
 
 ### Verify which Codex version is running
 
-Open one of the `Launch Codex ...` shortcuts, then run:
+Open one of the desktop shortcuts, then run:
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "name='Codex.exe'" |
@@ -279,7 +269,7 @@ the installed MSIX package; the patched path should be under LocalAppData.
 ### Verify the RTL behavior
 
 1. Ensure all existing Codex windows are closed.
-2. Open the desktop shortcut named `Launch Codex RTL`.
+2. Open the desktop shortcut named `Codex RTL`.
 3. Confirm Codex starts normally and can access the expected account/workspace.
 4. Type a Hebrew or Arabic sentence in the composer and confirm it aligns RTL.
 5. Type an English sentence and confirm it aligns LTR.
@@ -298,8 +288,9 @@ Run the lightweight direction tests from the repository:
 node .\tests\rtl-direction.test.js
 ```
 
-The launcher terminates an existing regular Codex instance before starting the
-RTL copy, preventing Electron from reusing the wrong single-instance process.
+Use `Codex RTL` when switching from the original app. The shortcut terminates
+existing Codex processes before starting the RTL copy, preventing Electron from
+reusing the wrong single-instance process.
 
 ## Files and Folders Created
 
@@ -311,8 +302,6 @@ Persistent files:
 %LOCALAPPDATA%\OpenAI\CodexRtl\patch-state.json
 <Desktop>\Codex RTL.lnk
 <Desktop>\Codex (Original).lnk
-<Desktop>\Launch Codex RTL.lnk
-<Desktop>\Launch Codex Original.lnk
 ```
 
 Temporary or indirect files:
@@ -339,8 +328,7 @@ The uninstaller removes:
 ```text
 %LOCALAPPDATA%\OpenAI\CodexRtl\
 <Desktop>\Codex RTL.lnk
-<Desktop>\Launch Codex RTL.lnk
-<Desktop>\Launch Codex Original.lnk
+<Desktop>\Codex (Original).lnk
 ```
 
 Verify removal:
@@ -348,11 +336,10 @@ Verify removal:
 ```powershell
 Test-Path "$env:LOCALAPPDATA\OpenAI\CodexRtl"
 Test-Path "$([Environment]::GetFolderPath('Desktop'))\Codex RTL.lnk"
-Test-Path "$([Environment]::GetFolderPath('Desktop'))\Launch Codex RTL.lnk"
-Test-Path "$([Environment]::GetFolderPath('Desktop'))\Launch Codex Original.lnk"
+Test-Path "$([Environment]::GetFolderPath('Desktop'))\Codex (Original).lnk"
 ```
 
-All four commands should return `False`. The official Codex installation remains
+All three commands should return `False`. The official Codex installation remains
 installed and unchanged.
 
 ## Recovery
@@ -405,6 +392,7 @@ if (
 $desktop = [Environment]::GetFolderPath('Desktop')
 @(
     (Join-Path $desktop 'Codex RTL.lnk'),
+    (Join-Path $desktop 'Codex (Original).lnk'),
     (Join-Path $desktop 'Launch Codex RTL.lnk'),
     (Join-Path $desktop 'Launch Codex Original.lnk')
 ) | Remove-Item -Force -ErrorAction SilentlyContinue
@@ -433,7 +421,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 The installer mirrors the latest official app into the local copy and reapplies
-the patch. It also refreshes all four desktop shortcuts. Repeat the artifact,
+the patch. It also refreshes the two desktop shortcuts. Repeat the artifact,
 original-hash, launch-path, and RTL checks above.
 
 Codex UI internals may change between releases. A successful installer run does

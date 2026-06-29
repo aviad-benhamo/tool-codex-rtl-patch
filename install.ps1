@@ -5,8 +5,8 @@
 .DESCRIPTION
   This installer does not modify the Microsoft Store/MSIX package under
   WindowsApps. It copies the Codex app folder to LocalAppData, patches the
-  copied app.asar, and creates separate desktop shortcuts for the patched RTL
-  copy and the original Microsoft Store application.
+  copied app.asar, and creates separate guarded desktop shortcuts for the
+  patched RTL copy and the original Microsoft Store application.
 #>
 param(
     [switch]$DryRun,
@@ -24,8 +24,10 @@ $StatePath = Join-Path $InstallRoot 'patch-state.json'
 $DesktopPath = [Environment]::GetFolderPath('Desktop')
 $RtlShortcutPath = Join-Path $DesktopPath 'Codex RTL.lnk'
 $OriginalShortcutPath = Join-Path $DesktopPath 'Codex (Original).lnk'
-$RtlLauncherShortcutPath = Join-Path $DesktopPath 'Launch Codex RTL.lnk'
-$OriginalLauncherShortcutPath = Join-Path $DesktopPath 'Launch Codex Original.lnk'
+$LegacyShortcutPaths = @(
+    (Join-Path $DesktopPath 'Launch Codex RTL.lnk'),
+    (Join-Path $DesktopPath 'Launch Codex Original.lnk')
+)
 $ExplorerPath = Join-Path $env:WINDIR 'explorer.exe'
 $PowerShellPath = Join-Path $PSHOME 'powershell.exe'
 $OriginalAppUserModelId = 'OpenAI.Codex_2p2nqsd0c76g0!App'
@@ -276,39 +278,35 @@ function New-CodexShortcuts([string]$RtlAppDir, [string]$OriginalAppDir) {
     $rtlExe = Join-Path $RtlAppDir 'Codex.exe'
     $rtlIcon = Join-Path $RtlAppDir 'resources\icon.ico'
     $originalIcon = Join-Path $OriginalAppDir 'resources\icon.ico'
-
-    New-WindowsShortcut `
-        -ShortcutPath $RtlShortcutPath `
-        -TargetPath $rtlExe `
-        -WorkingDirectory $RtlAppDir `
-        -IconLocation $rtlIcon `
-        -Description 'Codex Desktop with local RTL patch'
-
-    New-WindowsShortcut `
-        -ShortcutPath $OriginalShortcutPath `
-        -TargetPath $ExplorerPath `
-        -Arguments $OriginalShellTarget `
-        -WorkingDirectory (Split-Path -Parent $ExplorerPath) `
-        -IconLocation $originalIcon `
-        -Description 'Original Microsoft Store Codex Desktop'
-
     $launcherBaseArguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherScriptPath`""
 
     New-WindowsShortcut `
-        -ShortcutPath $RtlLauncherShortcutPath `
+        -ShortcutPath $RtlShortcutPath `
         -TargetPath $PowerShellPath `
         -Arguments "$launcherBaseArguments -Variant Rtl" `
         -WorkingDirectory $InstallRoot `
         -IconLocation $rtlIcon `
-        -Description 'Stop running Codex processes and launch Codex RTL'
+        -Description 'Open Codex Desktop with local RTL patch and version guard'
 
     New-WindowsShortcut `
-        -ShortcutPath $OriginalLauncherShortcutPath `
+        -ShortcutPath $OriginalShortcutPath `
         -TargetPath $PowerShellPath `
         -Arguments "$launcherBaseArguments -Variant Original" `
         -WorkingDirectory $InstallRoot `
         -IconLocation $originalIcon `
         -Description 'Stop running Codex processes and launch original Codex'
+}
+
+function Remove-LegacyShortcuts {
+    foreach ($shortcutPath in $LegacyShortcutPaths) {
+        if (-not (Test-Path -LiteralPath $shortcutPath)) { continue }
+        if ($DryRun) {
+            Write-Host "DRY RUN remove legacy shortcut: $shortcutPath"
+        } else {
+            Remove-Item -LiteralPath $shortcutPath -Force
+            Write-Ok "Removed legacy shortcut: $shortcutPath"
+        }
+    }
 }
 
 function Save-State([object]$Package, [string]$SourceAppDir) {
@@ -322,6 +320,8 @@ function Save-State([object]$Package, [string]$SourceAppDir) {
         packageInstallLocation = $Package.InstallLocation
         sourceAppDir = $SourceAppDir
         targetAppDir = $TargetAppDir
+        installerScriptPath = $ScriptPath
+        repositoryDir = $ThisDir
     }
     $json = $state | ConvertTo-Json -Depth 5
     $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
@@ -357,6 +357,7 @@ Invoke-RobocopyMirror $sourceAppDir $TargetAppDir
 Patch-Asar $TargetAppDir $npx
 Install-LauncherScript
 New-CodexShortcuts $TargetAppDir $sourceAppDir
+Remove-LegacyShortcuts
 Save-State $pkg $sourceAppDir
 
 Write-Step 'Done'
@@ -364,8 +365,8 @@ if ($DryRun) {
     Write-Ok 'Dry run completed. No files were changed.'
 } else {
     Write-Ok 'Codex RTL is installed.'
-    Write-Host 'Desktop shortcuts: Codex RTL, Codex (Original), Launch Codex RTL, and Launch Codex Original'
-    Write-Host 'Use the Launch shortcuts to switch variants without manually stopping Codex processes.'
+    Write-Host 'Desktop shortcuts: Codex RTL and Codex (Original)'
+    Write-Host 'Both shortcuts stop existing Codex processes before launching the selected variant.'
 }
 
 if ($Launch -and -not $DryRun) {
