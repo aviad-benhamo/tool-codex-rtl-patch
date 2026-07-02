@@ -51,6 +51,132 @@ function Show-MessageBox([string]$Message, [string]$Title, [string]$Buttons, [st
     )
 }
 
+function Test-InstallerScript([string]$ScriptPath) {
+    if (-not $ScriptPath) {
+        return $false
+    }
+
+    if (-not (Test-Path -LiteralPath $ScriptPath -PathType Leaf)) {
+        return $false
+    }
+
+    $repoDir = Split-Path -Parent $ScriptPath
+    $requiredPaths = @(
+        (Join-Path $repoDir 'src\codex-rtl-patch.js'),
+        (Join-Path $repoDir 'src\launch-codex.ps1')
+    )
+
+    foreach ($requiredPath in $requiredPaths) {
+        if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
+function Add-UniqueCandidate {
+    param(
+        [Parameter(Mandatory = $true)][ref]$Candidates,
+        [string]$Path
+    )
+
+    if (-not $Path) {
+        return
+    }
+
+    $trimmedPath = $Path.Trim()
+    if (-not $trimmedPath) {
+        return
+    }
+
+    foreach ($candidate in $Candidates.Value) {
+        if ($candidate.Equals($trimmedPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return
+        }
+    }
+
+    $Candidates.Value += $trimmedPath
+}
+
+function Add-RepoInstallCandidates {
+    param(
+        [Parameter(Mandatory = $true)][ref]$Candidates,
+        [string]$RepoDir
+    )
+
+    if (-not $RepoDir) {
+        return
+    }
+
+    Add-UniqueCandidate -Candidates $Candidates -Path (Join-Path $RepoDir 'install.ps1')
+
+    $parentDir = Split-Path -Parent $RepoDir
+    if (-not $parentDir -or -not (Test-Path -LiteralPath $parentDir -PathType Container)) {
+        return
+    }
+
+    foreach ($repoName in @('tool-codex-rtl-patch', 'codex-desktop-rtl-patch')) {
+        Add-UniqueCandidate -Candidates $Candidates -Path (Join-Path (Join-Path $parentDir $repoName) 'install.ps1')
+    }
+}
+
+function Resolve-InstallerScriptPath([object]$State) {
+    $candidates = @()
+
+    if ($State -and ($State.PSObject.Properties.Name -contains 'installerScriptPath')) {
+        Add-UniqueCandidate ([ref]$candidates) ([string]$State.installerScriptPath)
+        $installerRepoDir = Split-Path -Parent ([string]$State.installerScriptPath)
+        Add-RepoInstallCandidates ([ref]$candidates) $installerRepoDir
+    }
+
+    if ($State -and ($State.PSObject.Properties.Name -contains 'repositoryDir')) {
+        Add-RepoInstallCandidates ([ref]$candidates) ([string]$State.repositoryDir)
+    }
+
+    foreach ($candidate in $candidates) {
+        if (Test-InstallerScript $candidate) {
+            return [System.IO.Path]::GetFullPath($candidate)
+        }
+    }
+
+    return $null
+}
+
+function Update-PatchStateInstallerPath([object]$State, [string]$InstallerScriptPath) {
+    if (-not $State -or -not $InstallerScriptPath) {
+        return
+    }
+
+    $installerScriptFullPath = [System.IO.Path]::GetFullPath($InstallerScriptPath)
+    $repositoryDir = Split-Path -Parent $installerScriptFullPath
+    $changed = $false
+
+    if (-not ($State.PSObject.Properties.Name -contains 'installerScriptPath')) {
+        $State | Add-Member -NotePropertyName installerScriptPath -NotePropertyValue $installerScriptFullPath
+        $changed = $true
+    } elseif ([string]$State.installerScriptPath -ne $installerScriptFullPath) {
+        $State.installerScriptPath = $installerScriptFullPath
+        $changed = $true
+    }
+
+    if (-not ($State.PSObject.Properties.Name -contains 'repositoryDir')) {
+        $State | Add-Member -NotePropertyName repositoryDir -NotePropertyValue $repositoryDir
+        $changed = $true
+    } elseif ([string]$State.repositoryDir -ne $repositoryDir) {
+        $State.repositoryDir = $repositoryDir
+        $changed = $true
+    }
+
+    if (-not $changed) {
+        return
+    }
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    $json = $State | ConvertTo-Json -Depth 5
+    [System.IO.File]::WriteAllText($statePath, $json + "`n", $utf8NoBom)
+}
+
 function Start-Rtl {
     if (-not (Test-Path -LiteralPath $rtlExe -PathType Leaf)) {
         throw "Codex RTL executable was not found: $rtlExe"
@@ -60,12 +186,9 @@ function Start-Rtl {
 }
 
 function Invoke-RtlRebuild([object]$State) {
-    $installerScriptPath = $null
-    if ($State -and ($State.PSObject.Properties.Name -contains 'installerScriptPath')) {
-        $installerScriptPath = [string]$State.installerScriptPath
-    }
+    $installerScriptPath = Resolve-InstallerScriptPath $State
 
-    if (-not $installerScriptPath -or -not (Test-Path -LiteralPath $installerScriptPath -PathType Leaf)) {
+    if (-not $installerScriptPath) {
         $manual = @"
 Codex RTL cannot rebuild automatically because the reviewed local installer path is not available.
 
@@ -77,6 +200,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
         return $false
     }
 
+    Update-PatchStateInstallerPath $State $installerScriptPath
     Stop-CodexProcesses
 
     $powershellPath = Join-Path $PSHOME 'powershell.exe'

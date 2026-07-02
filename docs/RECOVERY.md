@@ -18,7 +18,7 @@ Use this path when `Codex RTL` crashes, fails to launch, or behaves incorrectly.
 2. Open PowerShell in the local repository:
 
 ```powershell
-cd C:\Workspace\active\codex-desktop-rtl-patch
+cd C:\Workspace\active\tool-codex-rtl-patch
 ```
 
 3. Preview the uninstall:

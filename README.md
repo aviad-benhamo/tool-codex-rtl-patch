@@ -86,7 +86,7 @@ command should return `True`.
 ### 1. Open the local clone
 
 ```powershell
-cd C:\Workspace\active\codex-desktop-rtl-patch
+cd C:\Workspace\active\tool-codex-rtl-patch
 git status --short
 ```
 

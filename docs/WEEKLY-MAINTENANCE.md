@@ -83,7 +83,7 @@ taskkill /IM Codex.exe /F
 ### 5. Go to the patch repository
 
 ```powershell
-cd C:\Workspace\active\codex-desktop-rtl-patch
+cd C:\Workspace\active\tool-codex-rtl-patch
 ```
 
 ---
@@ -221,14 +221,14 @@ This bypasses the RTL copy.
 ### Option 2: Rebuild RTL
 
 ```powershell
-cd C:\Workspace\active\codex-desktop-rtl-patch
+cd C:\Workspace\active\tool-codex-rtl-patch
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 ### Option 3: Uninstall RTL Copy
 
 ```powershell
-cd C:\Workspace\active\codex-desktop-rtl-patch
+cd C:\Workspace\active\tool-codex-rtl-patch
 powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
