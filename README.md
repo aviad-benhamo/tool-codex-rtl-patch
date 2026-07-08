@@ -51,11 +51,16 @@ Store / MSIX installation under `C:\Program Files\WindowsApps`.
 
 ## Screenshots / Demo
 
-No screenshots or public demo are currently included.
+The screenshots below show the patched Codex Desktop copy rendering Hebrew
+right-to-left while preserving readable inline technical content.
 
-This is a local Windows desktop patching utility. Validation is performed by
-running the local test file and manually checking RTL behavior in the patched
-Codex Desktop copy.
+![Codex RTL Hebrew response with inline technical paths and commands](assets/screenshots/180626.png)
+
+![Codex RTL Hebrew response with mixed Hebrew and model names](assets/screenshots/180846.png)
+
+This is a local Windows desktop patching utility. There is no hosted public
+demo. Validation is performed by running the local test file and manually
+checking RTL behavior in the patched Codex Desktop copy.
 
 ## Quick Start
 
@@ -139,6 +144,8 @@ environment variables or secret configuration.
 |-- tests/
 |   |-- launcher-guard.test.js
 |   `-- rtl-direction.test.js
+|-- assets/
+|   `-- screenshots/
 |-- docs/
 |   |-- RECOVERY.md
 |   `-- WEEKLY-MAINTENANCE.md
