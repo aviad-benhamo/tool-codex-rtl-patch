@@ -16,9 +16,18 @@ This repository is not an OpenAI product.
 
 ## Overview
 
-Codex Desktop RTL Patch creates a separate local copy of the installed Codex
-Desktop application, injects RTL presentation logic into that copy, and creates
-desktop shortcuts for both the patched and original applications.
+Codex Desktop RTL Patch is based on the original
+[`mnigli/codex-desktop-rtl-patch`](https://github.com/mnigli/codex-desktop-rtl-patch)
+project by `mnigli`.
+
+This fork keeps the original MIT license and preserves upstream credit. The
+current repository adapts the project for the maintained Windows workflow and
+adds local usability improvements around installation, launcher safety, update
+detection, and recovery.
+
+The tool creates a separate local copy of the installed Codex Desktop
+application, injects RTL presentation logic into that copy, and creates desktop
+shortcuts for both the patched and original applications.
 
 The patch is intended for Hebrew, Arabic, and mixed-language Codex usage. It
 keeps code blocks, inline code, terminals, editor-like surfaces, and developer
@@ -35,7 +44,8 @@ Store / MSIX installation under `C:\Program Files\WindowsApps`.
   syntax-highlighted content.
 - Composer direction updates while typing.
 - Separate `Codex RTL` and `Codex (Original)` desktop shortcuts.
-- Guarded launcher that warns when the official Codex package has changed.
+- Guarded launcher that warns when the official Codex package has changed and
+  offers to rebuild the RTL copy with one click.
 - Dry-run install and uninstall scripts.
 - Recovery documentation for returning to the official Codex application.
 
@@ -158,6 +168,9 @@ Runtime flow:
 7. Desktop shortcuts are created for `Codex RTL` and `Codex (Original)`.
 8. `src/launch-codex.ps1` stops existing Codex processes before launching the
    selected variant.
+9. When launching `Codex RTL`, the launcher compares the official Codex version
+   with the recorded RTL source version and displays a rebuild prompt when the
+   official app has changed.
 
 The original Codex installation remains the source of truth for updates. The
 RTL copy must be rebuilt after official Codex Desktop updates.
@@ -208,4 +221,9 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
+This project keeps the same MIT License as the original
+[`mnigli/codex-desktop-rtl-patch`](https://github.com/mnigli/codex-desktop-rtl-patch)
+project. The upstream copyright notice is preserved in [LICENSE](LICENSE).
+
+This fork credits the original creator and documents the Windows-specific
+adjustments and maintenance improvements made here.
