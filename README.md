@@ -58,6 +58,8 @@ right-to-left while preserving readable inline technical content.
 
 ![Codex RTL Hebrew response with mixed Hebrew and model names](assets/screenshots/180846.png)
 
+![Codex RTL and Codex (Original) shortcuts](assets/screenshots/120514.png)
+
 This is a local Windows desktop patching utility. There is no hosted public
 demo. Validation is performed by running the local test file and manually
 checking RTL behavior in the patched Codex Desktop copy.
