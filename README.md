@@ -126,16 +126,22 @@ environment variables or secret configuration.
 
 ## Process Safety
 
-The launcher only terminates Codex Desktop processes that it can positively
-identify by executable path:
+Codex Desktop, Codex RTL, and editor integrations such as VS Code Codex may all
+run similarly named processes, including `Codex.exe` and `codex.exe`. The
+launcher must never terminate Codex processes only by executable name.
+
+Normal launcher flow only terminates processes that are positively identified as
+known Desktop app processes, preferably by executable path under:
 
 - Original Codex Desktop under the `OpenAI.Codex` Microsoft Store package app
   directory.
 - Codex RTL under `%LOCALAPPDATA%\OpenAI\CodexRtl\app`.
 
-Unknown Codex processes are preserved by default. This is important because
-other tools, including VS Code Codex, can run their own `codex.exe` process that
-must not be stopped by the Desktop launcher.
+Unknown Codex processes are preserved by default. Broad process cleanup is
+allowed only as an explicit manual recovery action, not as part of normal
+launcher flow. This prevents VS Code Codex from crashing with `Codex process
+errored: Codex process is not available` when switching between Original Codex
+and Codex RTL.
 
 ## Design Principles
 
