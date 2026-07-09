@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-09
+
 ### Added
 
 - Initial release-readiness documentation set for the Codex Desktop RTL patch.
