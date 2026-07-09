@@ -156,8 +156,11 @@ environment variables or secret configuration.
 `-- README.md
 ```
 
-Deprecated upstream macOS and autopatch scripts remain in the repository for
-reference, but this fork supports Windows only.
+This repository officially supports Windows only.
+
+Some macOS-related files from the upstream project remain in the repository for
+reference and potential future community work, but they are not currently
+maintained or officially supported by this repository.
 
 ## Architecture
 

@@ -165,7 +165,7 @@ Hello שלום
 
 ```text
 Explain this path:
-C:\Workspace\active\example-project\server\api\order\order.controller.js
+path\to\tool-codex-rtl-patch\src\launch-codex.ps1
 ```
 
 ```text

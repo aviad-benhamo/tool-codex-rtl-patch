@@ -1,6 +1,6 @@
 # Codex RTL Recovery Procedure
 
-This procedure applies to the private Windows-only Codex RTL patch.
+This procedure applies to the Windows-only Codex RTL patch.
 
 The Windows installer creates a separate patched copy under LocalAppData. It
 does not intentionally modify the official Microsoft Store/MSIX installation
@@ -15,10 +15,10 @@ processes.
 Use this path when `Codex RTL` crashes, fails to launch, or behaves incorrectly.
 
 1. Close every regular and patched Codex window.
-2. Open PowerShell in the local repository:
+2. Open PowerShell in the local repository clone:
 
 ```powershell
-cd C:\Workspace\active\tool-codex-rtl-patch
+cd <path-to-local-repository>
 ```
 
 3. Preview the uninstall:

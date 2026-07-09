@@ -14,3 +14,6 @@ All notable changes to this project will be documented in this file.
 - Documented upstream attribution to `mnigli/codex-desktop-rtl-patch`, license
   continuity, and Windows-specific fork improvements.
 - Added README screenshot references for the RTL Codex Desktop behavior.
+- Removed stale private wording and machine-specific repository paths from
+  public-facing documentation, and clarified the status of upstream macOS
+  reference files.
