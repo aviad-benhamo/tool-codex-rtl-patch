@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const childProcess = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -15,6 +16,66 @@ const rtlPatch = fs.readFileSync(
 
 assert.doesNotMatch(launcher, /StopExisting/);
 assert.match(launcher, /Get-AppxPackage -Name 'OpenAI\.Codex'/);
+assert.match(launcher, /function Resolve-CodexRuntimeExecutable/);
+assert.match(
+  launcher,
+  /foreach \(\$executableName in @\('ChatGPT\.exe', 'Codex\.exe'\)\)/
+);
+assert.match(
+  launcher,
+  /No supported Codex Desktop runtime executable was found in:/
+);
+
+const runtimeResolverStart = launcher.indexOf(
+  "function Resolve-CodexRuntimeExecutable"
+);
+const runtimeResolverEnd = launcher.indexOf(
+  "\nfunction Get-CodexDesktopAppDirs",
+  runtimeResolverStart
+);
+assert.notEqual(runtimeResolverStart, -1, "Could not locate runtime resolver");
+assert.notEqual(runtimeResolverEnd, -1, "Could not delimit runtime resolver");
+
+const runtimeResolver = launcher.slice(runtimeResolverStart, runtimeResolverEnd);
+const runtimeResolverTest = `
+$ErrorActionPreference = 'Stop'
+${runtimeResolver}
+function Test-Path {
+    param([string]$LiteralPath, [string]$PathType)
+    return $script:runtimePaths -contains $LiteralPath
+}
+
+$runtimeDir = 'C:\\runtime'
+$script:runtimePaths = @('C:\\runtime\\ChatGPT.exe', 'C:\\runtime\\Codex.exe')
+if ((Resolve-CodexRuntimeExecutable $runtimeDir) -ne 'C:\\runtime\\ChatGPT.exe') {
+    throw 'ChatGPT.exe was not preferred over Codex.exe.'
+}
+
+$script:runtimePaths = @('C:\\runtime\\Codex.exe')
+if ((Resolve-CodexRuntimeExecutable $runtimeDir) -ne 'C:\\runtime\\Codex.exe') {
+    throw 'Codex.exe fallback was not selected.'
+}
+
+$script:runtimePaths = @()
+try {
+    Resolve-CodexRuntimeExecutable $runtimeDir | Out-Null
+    throw 'Resolver did not fail when no runtime executable existed.'
+} catch {
+    if ($_.Exception.Message -notmatch 'Expected ChatGPT.exe or Codex.exe') {
+        throw
+    }
+}
+`;
+const runtimeResolverResult = childProcess.spawnSync(
+  "powershell.exe",
+  ["-NoProfile", "-Command", "-"],
+  { encoding: "utf8", input: runtimeResolverTest }
+);
+assert.equal(
+  runtimeResolverResult.status,
+  0,
+  runtimeResolverResult.stderr || runtimeResolverResult.stdout
+);
 assert.match(launcher, /\$statePath = Join-Path \$installRoot 'patch-state\.json'/);
 assert.match(launcher, /packageVersion/);
 assert.match(launcher, /installerScriptPath/);
@@ -32,6 +93,8 @@ assert.match(launcher, /function Get-CodexDesktopAppDirs/);
 assert.match(launcher, /function Get-CodexDesktopProcesses/);
 assert.match(launcher, /Get-CimInstance Win32_Process/);
 assert.match(launcher, /ExecutablePath/);
+assert.match(launcher, /\$runtimeExecutableNames = @\('ChatGPT\.exe', 'Codex\.exe'\)/);
+assert.match(launcher, /\$runtimeExecutableNames -contains \$_\.Name/);
 assert.match(launcher, /function Test-UnderPath/);
 assert.match(launcher, /Stop-Process -Id \$process\.ProcessId -Force/);
 assert.match(launcher, /Stop-CodexDesktopProcesses\s*\r?\n\s*Start-Rtl/);
@@ -52,6 +115,19 @@ assert.doesNotMatch(installer, /stop existing Codex processes/i);
 assert.match(installer, /Remove-LegacyShortcuts/);
 assert.match(installer, /installerScriptPath = \$ScriptPath/);
 assert.match(installer, /repositoryDir = \$ThisDir/);
+assert.match(installer, /function Resolve-CodexRuntimeExecutable/);
+assert.match(
+  installer,
+  /foreach \(\$executableName in @\('ChatGPT\.exe', 'Codex\.exe'\)\)/
+);
+assert.match(
+  installer,
+  /No supported Codex Desktop runtime executable was found in:/
+);
+assert.match(installer, /\$sourceRuntime = Resolve-CodexRuntimeExecutable \$sourceAppDir/);
+assert.match(installer, /\$targetRuntime = Resolve-CodexRuntimeExecutable \$TargetAppDir/);
+assert.match(installer, /Start-Process -FilePath \$targetRuntime -WorkingDirectory \$TargetAppDir/);
+assert.match(installer, /resources\\icon-chatgpt\.ico', 'resources\\icon\.ico/);
 
 assert.doesNotMatch(rtlPatch, /patch-state\.json|installerScriptPath|Get-AppxPackage/);
 

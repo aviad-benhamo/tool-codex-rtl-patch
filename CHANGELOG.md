@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Resolved the current unified Codex Desktop UI runtime as `ChatGPT.exe`, with
+  a `Codex.exe` fallback for older builds, so the local RTL copy no longer
+  launches the update trampoline.
 - Scoped launcher process termination to recognized Codex Desktop app paths so
   unknown Codex processes, including editor extension backends, are preserved.
 

@@ -8,8 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $installRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
-$rtlExe = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl\app\Codex.exe'
-$rtlAppDir = Split-Path -Parent $rtlExe
+$rtlAppDir = Join-Path $installRoot 'app'
 $statePath = Join-Path $installRoot 'patch-state.json'
 $originalShellTarget = 'shell:AppsFolder\OpenAI.Codex_2p2nqsd0c76g0!App'
 
@@ -57,6 +56,17 @@ function Add-UniquePath {
     $Paths.Value += $fullPath
 }
 
+function Resolve-CodexRuntimeExecutable([string]$AppDir) {
+    foreach ($executableName in @('ChatGPT.exe', 'Codex.exe')) {
+        $candidate = Join-Path $AppDir $executableName
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+
+    throw "No supported Codex Desktop runtime executable was found in: $AppDir. Expected ChatGPT.exe or Codex.exe."
+}
+
 function Get-CodexDesktopAppDirs {
     $appDirs = @()
 
@@ -81,11 +91,11 @@ function Get-CodexDesktopProcesses {
         return @()
     }
 
+    $runtimeExecutableNames = @('ChatGPT.exe', 'Codex.exe')
     $processes = Get-CimInstance Win32_Process |
         Where-Object {
             $_.ExecutablePath -and
-            ($_.Name.Equals('Codex.exe', [System.StringComparison]::OrdinalIgnoreCase) -or
-             $_.Name.Equals('codex.exe', [System.StringComparison]::OrdinalIgnoreCase))
+            ($runtimeExecutableNames -contains $_.Name)
         }
 
     foreach ($process in $processes) {
@@ -270,11 +280,8 @@ function Update-PatchStateInstallerPath([object]$State, [string]$InstallerScript
 }
 
 function Start-Rtl {
-    if (-not (Test-Path -LiteralPath $rtlExe -PathType Leaf)) {
-        throw "Codex RTL executable was not found: $rtlExe"
-    }
-
-    Start-Process -FilePath $rtlExe -WorkingDirectory (Split-Path -Parent $rtlExe)
+    $rtlRuntime = Resolve-CodexRuntimeExecutable $rtlAppDir
+    Start-Process -FilePath $rtlRuntime -WorkingDirectory $rtlAppDir
 }
 
 function Invoke-RtlRebuild([object]$State) {

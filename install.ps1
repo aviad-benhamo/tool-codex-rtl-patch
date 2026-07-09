@@ -74,6 +74,27 @@ function Get-CodexPackage {
     throw 'OpenAI.Codex package was not found. Install Codex Desktop first.'
 }
 
+function Resolve-CodexRuntimeExecutable([string]$AppDir) {
+    foreach ($executableName in @('ChatGPT.exe', 'Codex.exe')) {
+        $candidate = Join-Path $AppDir $executableName
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+
+    throw "No supported Codex Desktop runtime executable was found in: $AppDir. Expected ChatGPT.exe or Codex.exe."
+}
+
+function Resolve-CodexRuntimeIconRelativePath([string]$AppDir) {
+    foreach ($relativePath in @('resources\icon-chatgpt.ico', 'resources\icon.ico')) {
+        if (Test-Path -LiteralPath (Join-Path $AppDir $relativePath) -PathType Leaf) {
+            return $relativePath
+        }
+    }
+
+    return $null
+}
+
 function Get-NpxCommand {
     $cmd = Get-Command 'npx.cmd' -ErrorAction SilentlyContinue
     if (-not $cmd) { $cmd = Get-Command 'npx' -ErrorAction SilentlyContinue }
@@ -274,10 +295,19 @@ function New-WindowsShortcut {
     Write-Ok "Created shortcut: $ShortcutPath"
 }
 
-function New-CodexShortcuts([string]$RtlAppDir, [string]$OriginalAppDir) {
-    $rtlExe = Join-Path $RtlAppDir 'Codex.exe'
-    $rtlIcon = Join-Path $RtlAppDir 'resources\icon.ico'
-    $originalIcon = Join-Path $OriginalAppDir 'resources\icon.ico'
+function New-CodexShortcuts(
+    [string]$RtlAppDir,
+    [string]$OriginalAppDir,
+    [string]$RuntimeExecutableName,
+    [string]$IconRelativePath
+) {
+    $rtlRuntime = Join-Path $RtlAppDir $RuntimeExecutableName
+    if (-not $DryRun -and -not (Test-Path -LiteralPath $rtlRuntime -PathType Leaf)) {
+        throw "Resolved Codex RTL runtime was not found: $rtlRuntime"
+    }
+
+    $rtlIcon = if ($IconRelativePath) { Join-Path $RtlAppDir $IconRelativePath } else { $null }
+    $originalIcon = if ($IconRelativePath) { Join-Path $OriginalAppDir $IconRelativePath } else { $null }
     $launcherBaseArguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherScriptPath`""
 
     New-WindowsShortcut `
@@ -341,8 +371,12 @@ $sourceAsar = Join-Path $sourceAppDir 'resources\app.asar'
 if (-not (Test-Path -LiteralPath $sourceAsar)) {
     throw "Installed Codex app.asar was not found: $sourceAsar"
 }
+$sourceRuntime = Resolve-CodexRuntimeExecutable $sourceAppDir
+$runtimeExecutableName = Split-Path -Leaf $sourceRuntime
+$runtimeIconRelativePath = Resolve-CodexRuntimeIconRelativePath $sourceAppDir
 Write-Ok "Found Codex $($pkg.Version)"
 Write-Host "Source: $sourceAppDir"
+Write-Host "Runtime: $runtimeExecutableName"
 
 Write-Step 'Checking tools'
 $npx = Get-NpxCommand
@@ -356,7 +390,7 @@ Invoke-RobocopyMirror $sourceAppDir $TargetAppDir
 
 Patch-Asar $TargetAppDir $npx
 Install-LauncherScript
-New-CodexShortcuts $TargetAppDir $sourceAppDir
+New-CodexShortcuts $TargetAppDir $sourceAppDir $runtimeExecutableName $runtimeIconRelativePath
 Remove-LegacyShortcuts
 Save-State $pkg $sourceAppDir
 
@@ -370,5 +404,6 @@ if ($DryRun) {
 }
 
 if ($Launch -and -not $DryRun) {
-    Start-Process -FilePath (Join-Path $TargetAppDir 'Codex.exe') -WorkingDirectory $TargetAppDir
+    $targetRuntime = Resolve-CodexRuntimeExecutable $TargetAppDir
+    Start-Process -FilePath $targetRuntime -WorkingDirectory $TargetAppDir
 }

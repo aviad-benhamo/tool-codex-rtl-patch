@@ -130,9 +130,9 @@ $desktopProcessIds | ForEach-Object {
 powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
-Do not stop unknown `Codex.exe` or `codex.exe` processes by name. Other tools,
-including VS Code Codex, can run their own Codex backend process and should be
-preserved unless you intentionally close that tool first.
+Do not stop unknown `ChatGPT.exe`, `Codex.exe`, or `codex.exe` processes by
+name. Other tools, including VS Code Codex, can run their own Codex backend
+process and should be preserved unless you intentionally close that tool first.
 
 ## Manual Cleanup
 
@@ -296,6 +296,8 @@ Test-Path .\src\codex-rtl-patch.js
    - A missing `webview\index.html`.
    - A missing local patch file. The Windows installer does not download a
      replacement and will fail closed.
+   - A missing runtime executable. Current unified builds require
+     `ChatGPT.exe`; older builds can use `Codex.exe`.
 7. Do not retry installation until regular Codex works and the cause has been
    reviewed.
 

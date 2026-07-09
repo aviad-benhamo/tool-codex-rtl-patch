@@ -127,8 +127,11 @@ environment variables or secret configuration.
 ## Process Safety
 
 Codex Desktop, Codex RTL, and editor integrations such as VS Code Codex may all
-run similarly named processes, including `Codex.exe` and `codex.exe`. The
-launcher must never terminate Codex processes only by executable name.
+run similarly named processes. Current unified Codex builds use `ChatGPT.exe`
+for the Desktop UI; older builds use `Codex.exe`, while editor integrations may
+run their own `codex.exe`. The launcher resolves `ChatGPT.exe` first and falls
+back to `Codex.exe`, but must never terminate processes only by executable
+name.
 
 Normal launcher flow only terminates processes that are positively identified as
 known Desktop app processes, preferably by executable path under:

@@ -61,21 +61,26 @@ C:\Program Files\WindowsApps\OpenAI.Codex_...
 Run:
 
 ```powershell
-Get-CimInstance Win32_Process -Filter "name='Codex.exe'" |
-    Select-Object ProcessId, ExecutablePath
+Get-CimInstance Win32_Process |
+    Where-Object { $_.Name -in @('ChatGPT.exe', 'Codex.exe', 'codex.exe') } |
+    Select-Object ProcessId, Name, ExecutablePath
 ```
 
-For the RTL version, `ExecutablePath` should point to:
+For current unified builds, the RTL version should run as:
 
 ```text
-%LOCALAPPDATA%\OpenAI\CodexRtl\app\Codex.exe
+%LOCALAPPDATA%\OpenAI\CodexRtl\app\ChatGPT.exe
 ```
 
-For the original version, it should point to:
+For the original version, it should run as:
 
 ```text
-C:\Program Files\WindowsApps\OpenAI.Codex_...\app\Codex.exe
+C:\Program Files\WindowsApps\OpenAI.Codex_...\app\ChatGPT.exe
 ```
+
+Older Codex builds may use `Codex.exe`; the launcher selects it only when
+`ChatGPT.exe` is not present. Confirm the full executable path before stopping
+any process.
 
 ## Run Local Tests
 
@@ -113,7 +118,7 @@ its executable path and stop only the specific Desktop PID:
 
 ```powershell
 Get-CimInstance Win32_Process |
-    Where-Object { $_.Name -in @('Codex.exe', 'codex.exe') } |
+    Where-Object { $_.Name -in @('ChatGPT.exe', 'Codex.exe', 'codex.exe') } |
     Select-Object ProcessId, Name, ExecutablePath
 
 $desktopProcessIds = (Read-Host 'Enter inspected Desktop PIDs separated by comma') -split ',' |
