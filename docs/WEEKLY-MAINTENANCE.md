@@ -158,7 +158,7 @@ Get-CimInstance Win32_Process -Filter "name='Codex.exe'" |
 For the RTL version, `ExecutablePath` should point to:
 
 ```text
-C:\Users\Aviad-Biz\AppData\Local\OpenAI\CodexRtl\app\Codex.exe
+C:\Users\<YourUser>\AppData\Local\OpenAI\CodexRtl\app\Codex.exe
 ```
 
 For the original version, it should point to:
