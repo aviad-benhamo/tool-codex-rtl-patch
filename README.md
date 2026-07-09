@@ -124,6 +124,19 @@ repository:
 The absence of `.env.example` is intentional because the project has no runtime
 environment variables or secret configuration.
 
+## Process Safety
+
+The launcher only terminates Codex Desktop processes that it can positively
+identify by executable path:
+
+- Original Codex Desktop under the `OpenAI.Codex` Microsoft Store package app
+  directory.
+- Codex RTL under `%LOCALAPPDATA%\OpenAI\CodexRtl\app`.
+
+Unknown Codex processes are preserved by default. This is important because
+other tools, including VS Code Codex, can run their own `codex.exe` process that
+must not be stopped by the Desktop launcher.
+
 ## Design Principles
 
 - Keep Codex functionality unchanged; patch RTL presentation only.
@@ -178,8 +191,8 @@ Runtime flow:
 5. `webview/index.html` is patched to load the RTL script.
 6. The ASAR is repacked in the local copy.
 7. Desktop shortcuts are created for `Codex RTL` and `Codex (Original)`.
-8. `src/launch-codex.ps1` stops existing Codex processes before launching the
-   selected variant.
+8. `src/launch-codex.ps1` stops only recognized Codex Desktop processes before
+   launching the selected variant.
 9. When launching `Codex RTL`, the launcher compares the official Codex version
    with the recorded RTL source version and displays a rebuild prompt when the
    official app has changed.

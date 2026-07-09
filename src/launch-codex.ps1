@@ -9,11 +9,103 @@ $ErrorActionPreference = 'Stop'
 
 $installRoot = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl'
 $rtlExe = Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl\app\Codex.exe'
+$rtlAppDir = Split-Path -Parent $rtlExe
 $statePath = Join-Path $installRoot 'patch-state.json'
 $originalShellTarget = 'shell:AppsFolder\OpenAI.Codex_2p2nqsd0c76g0!App'
 
-function Stop-CodexProcesses {
-    & taskkill.exe /IM Codex.exe /F 2>$null | Out-Null
+function Resolve-FullPath([string]$Path) {
+    if (-not $Path) {
+        return $null
+    }
+
+    try {
+        return [System.IO.Path]::GetFullPath($Path).TrimEnd('\')
+    } catch {
+        return $null
+    }
+}
+
+function Test-UnderPath([string]$Child, [string]$Parent) {
+    $childFull = Resolve-FullPath $Child
+    $parentFull = Resolve-FullPath $Parent
+
+    if (-not $childFull -or -not $parentFull) {
+        return $false
+    }
+
+    return $childFull.Equals($parentFull, [System.StringComparison]::OrdinalIgnoreCase) -or
+        $childFull.StartsWith($parentFull + '\', [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Add-UniquePath {
+    param(
+        [Parameter(Mandatory = $true)][ref]$Paths,
+        [string]$Path
+    )
+
+    $fullPath = Resolve-FullPath $Path
+    if (-not $fullPath) {
+        return
+    }
+
+    foreach ($existingPath in $Paths.Value) {
+        if ($existingPath.Equals($fullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return
+        }
+    }
+
+    $Paths.Value += $fullPath
+}
+
+function Get-CodexDesktopAppDirs {
+    $appDirs = @()
+
+    if (Test-Path -LiteralPath $rtlAppDir -PathType Container) {
+        Add-UniquePath ([ref]$appDirs) $rtlAppDir
+    }
+
+    $pkg = Get-CodexPackage
+    if ($pkg -and $pkg.InstallLocation) {
+        $originalAppDir = Join-Path $pkg.InstallLocation 'app'
+        if (Test-Path -LiteralPath $originalAppDir -PathType Container) {
+            Add-UniquePath ([ref]$appDirs) $originalAppDir
+        }
+    }
+
+    return $appDirs
+}
+
+function Get-CodexDesktopProcesses {
+    $desktopAppDirs = @(Get-CodexDesktopAppDirs)
+    if ($desktopAppDirs.Count -eq 0) {
+        return @()
+    }
+
+    $processes = Get-CimInstance Win32_Process |
+        Where-Object {
+            $_.ExecutablePath -and
+            ($_.Name.Equals('Codex.exe', [System.StringComparison]::OrdinalIgnoreCase) -or
+             $_.Name.Equals('codex.exe', [System.StringComparison]::OrdinalIgnoreCase))
+        }
+
+    foreach ($process in $processes) {
+        foreach ($desktopAppDir in $desktopAppDirs) {
+            if (Test-UnderPath ([string]$process.ExecutablePath) $desktopAppDir) {
+                $process
+                break
+            }
+        }
+    }
+}
+
+function Stop-CodexDesktopProcesses {
+    # Do not stop Codex by process name. VS Code Codex also runs codex.exe, so only
+    # positively identified Desktop processes under known app directories are safe.
+    $processes = @(Get-CodexDesktopProcesses)
+    foreach ($process in $processes) {
+        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+
     Start-Sleep -Seconds 2
 }
 
@@ -201,7 +293,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
     }
 
     Update-PatchStateInstallerPath $State $installerScriptPath
-    Stop-CodexProcesses
+    Stop-CodexDesktopProcesses
 
     $powershellPath = Join-Path $PSHOME 'powershell.exe'
     $installerArguments = "-NoProfile -ExecutionPolicy Bypass -File `"$installerScriptPath`""
@@ -279,10 +371,10 @@ if ($Variant -eq 'Rtl') {
         return
     }
 
-    Stop-CodexProcesses
+    Stop-CodexDesktopProcesses
     Start-Rtl
     return
 }
 
-Stop-CodexProcesses
+Stop-CodexDesktopProcesses
 Start-Process -FilePath (Join-Path $env:WINDIR 'explorer.exe') -ArgumentList $originalShellTarget

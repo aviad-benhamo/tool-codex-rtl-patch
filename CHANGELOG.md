@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Scoped launcher process termination to recognized Codex Desktop app paths so
+  unknown Codex processes, including editor extension backends, are preserved.
+
 ## [0.1.0] - 2026-07-09
 
 ### Added

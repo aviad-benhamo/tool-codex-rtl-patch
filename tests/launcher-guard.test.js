@@ -25,8 +25,17 @@ assert.match(launcher, /function Confirm-RtlLaunch/);
 assert.match(launcher, /Select Yes to rebuild RTL now\./);
 assert.match(launcher, /Select No to continue launching the stale RTL copy\./);
 assert.match(launcher, /Invoke-RtlRebuild/);
-assert.match(launcher, /Stop-CodexProcesses\s*\r?\n\s*Start-Rtl/);
-assert.match(launcher, /Stop-CodexProcesses\s*\r?\nStart-Process -FilePath \(Join-Path \$env:WINDIR 'explorer\.exe'\)/);
+assert.doesNotMatch(launcher, /taskkill\.exe\s+\/IM\s+Codex\.exe\s+\/F/i);
+assert.doesNotMatch(launcher, /Stop-Process\s+-Name\s+Codex/i);
+assert.doesNotMatch(launcher, /\\.vscode\\extensions/i);
+assert.match(launcher, /function Get-CodexDesktopAppDirs/);
+assert.match(launcher, /function Get-CodexDesktopProcesses/);
+assert.match(launcher, /Get-CimInstance Win32_Process/);
+assert.match(launcher, /ExecutablePath/);
+assert.match(launcher, /function Test-UnderPath/);
+assert.match(launcher, /Stop-Process -Id \$process\.ProcessId -Force/);
+assert.match(launcher, /Stop-CodexDesktopProcesses\s*\r?\n\s*Start-Rtl/);
+assert.match(launcher, /Stop-CodexDesktopProcesses\s*\r?\nStart-Process -FilePath \(Join-Path \$env:WINDIR 'explorer\.exe'\)/);
 
 assert.match(
   installer,
@@ -38,6 +47,8 @@ assert.match(
 );
 assert.doesNotMatch(installer, /RtlLauncherShortcutPath|OriginalLauncherShortcutPath/);
 assert.doesNotMatch(installer, /-Variant Rtl -StopExisting|-Variant Original -StopExisting/);
+assert.doesNotMatch(installer, /Stop running Codex processes/i);
+assert.doesNotMatch(installer, /stop existing Codex processes/i);
 assert.match(installer, /Remove-LegacyShortcuts/);
 assert.match(installer, /installerScriptPath = \$ScriptPath/);
 assert.match(installer, /repositoryDir = \$ThisDir/);

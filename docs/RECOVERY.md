@@ -8,7 +8,7 @@ under `WindowsApps`. Recovery normally consists of removing the copied app and
 returning to the regular Codex Desktop shortcut.
 
 Run all commands from PowerShell. Save active work before stopping Codex
-processes.
+Desktop processes.
 
 ## Quick Recovery
 
@@ -90,22 +90,49 @@ It does not remove:
 
 The copied app may still be running and locking files.
 
-First inspect active Codex processes:
+First inspect active Codex Desktop processes by executable path:
 
 ```powershell
-Get-Process Codex -ErrorAction SilentlyContinue |
-    Select-Object Id, ProcessName, Path
+$pkg = Get-AppxPackage -Name OpenAI.Codex -ErrorAction SilentlyContinue |
+    Sort-Object Version -Descending |
+    Select-Object -First 1
+$desktopRoots = @(
+    (Join-Path $env:LOCALAPPDATA 'OpenAI\CodexRtl\app')
+)
+if ($pkg -and $pkg.InstallLocation) {
+    $desktopRoots += (Join-Path $pkg.InstallLocation 'app')
+}
+
+Get-CimInstance Win32_Process |
+    Where-Object {
+        $path = $_.ExecutablePath
+        $path -and ($desktopRoots | Where-Object {
+            $root = [System.IO.Path]::GetFullPath($_).TrimEnd('\')
+            $path.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase) -or
+                $path.Equals($root, [StringComparison]::OrdinalIgnoreCase)
+        })
+    } |
+    Select-Object ProcessId, Name, ExecutablePath
 ```
 
-Close all Codex windows normally. If a process remains, save all work and stop
-every process named `Codex`:
+Close all Codex Desktop windows normally. If a Desktop process remains, save all
+work and stop only the specific process IDs shown under the RTL or official
+Desktop app paths:
 
 ```powershell
-Stop-Process -Name Codex -Force
+$desktopProcessIds = (Read-Host 'Enter inspected Desktop PIDs separated by comma') -split ',' |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ } |
+    ForEach-Object { [int]$_ }
+$desktopProcessIds | ForEach-Object {
+    Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue
+}
 powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
-This also closes the official Codex application if it is running.
+Do not stop unknown `Codex.exe` or `codex.exe` processes by name. Other tools,
+including VS Code Codex, can run their own Codex backend process and should be
+preserved unless you intentionally close that tool first.
 
 ## Manual Cleanup
 
@@ -250,7 +277,7 @@ The source should point to the official package and the target should point to
 
 ## If the Patched App Fails to Launch
 
-1. Close every Codex process.
+1. Close every Codex Desktop window.
 2. Uninstall the patched copy using the Quick Recovery procedure.
 3. Verify the generated folder and shortcut were removed.
 4. Launch regular Codex Desktop and confirm it works.

@@ -294,7 +294,7 @@ function New-CodexShortcuts([string]$RtlAppDir, [string]$OriginalAppDir) {
         -Arguments "$launcherBaseArguments -Variant Original" `
         -WorkingDirectory $InstallRoot `
         -IconLocation $originalIcon `
-        -Description 'Stop running Codex processes and launch original Codex'
+        -Description 'Open original Codex through the Desktop-safe launcher'
 }
 
 function Remove-LegacyShortcuts {
@@ -366,7 +366,7 @@ if ($DryRun) {
 } else {
     Write-Ok 'Codex RTL is installed.'
     Write-Host 'Desktop shortcuts: Codex RTL and Codex (Original)'
-    Write-Host 'Both shortcuts stop existing Codex processes before launching the selected variant.'
+    Write-Host 'Both shortcuts preserve unknown Codex processes and only stop recognized Desktop app processes.'
 }
 
 if ($Launch -and -not $DryRun) {

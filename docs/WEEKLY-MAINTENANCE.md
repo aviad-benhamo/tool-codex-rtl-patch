@@ -38,8 +38,9 @@ There should be two main launchers on the Desktop:
 * `Codex (Original)` — official Codex app used for updates, troubleshooting, and
   comparison.
 
-Both shortcuts close any running Codex process before opening the selected
-variant. Use them when switching between original and RTL variants.
+Both shortcuts close only recognized Codex Desktop processes before opening the
+selected variant. Unknown Codex processes are preserved by default so tools such
+as VS Code Codex are not disrupted by Desktop switching.
 
 ## Verify the Official Codex Package
 
@@ -107,13 +108,25 @@ Dry run completed. No files were changed.
 Use this only when the automatic rebuild prompt is unavailable, fails, or you
 want to force a fresh local RTL copy.
 
-Close all Codex processes:
+Close all Codex Desktop windows normally. If a Desktop process remains, inspect
+its executable path and stop only the specific Desktop PID:
 
 ```powershell
-taskkill /IM Codex.exe /F
+Get-CimInstance Win32_Process |
+    Where-Object { $_.Name -in @('Codex.exe', 'codex.exe') } |
+    Select-Object ProcessId, Name, ExecutablePath
+
+$desktopProcessIds = (Read-Host 'Enter inspected Desktop PIDs separated by comma') -split ',' |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ } |
+    ForEach-Object { [int]$_ }
+$desktopProcessIds | ForEach-Object {
+    Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue
+}
 ```
 
-It is safe if this returns an error saying no process was found.
+Do not stop Codex processes by name. Only stop processes whose path is under the
+official Codex Desktop app directory or `%LOCALAPPDATA%\OpenAI\CodexRtl\app`.
 
 Then run:
 
@@ -218,7 +231,7 @@ docs/RECOVERY.md
 * Manual rebuilds are optional in normal use because the launcher can detect a
   stale RTL copy and offer to rebuild it.
 * Do not run Original and RTL at the same time. Use the desktop shortcuts so the
-  launcher closes the previous Codex process before opening the selected
-  variant.
+  launcher closes the previous recognized Desktop process before opening the
+  selected variant.
 * If Codex UI internals change after an official update, uninstall the RTL copy
   and continue using regular Codex until the patch is reviewed for compatibility.
