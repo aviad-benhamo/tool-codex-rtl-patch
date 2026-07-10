@@ -6,7 +6,7 @@
 
 ## Project Status
 
-Experimental.
+Experimental — release preparation `0.2.0`.
 
 This is an unofficial Windows-only utility for applying a local right-to-left
 presentation patch to Codex Desktop. It is maintained for personal production
@@ -24,6 +24,12 @@ This fork keeps the original MIT license and preserves upstream credit. The
 current repository adapts the project for the maintained Windows workflow and
 adds local usability improvements around installation, launcher safety, update
 detection, and recovery.
+
+The current unified ChatGPT Desktop runtime brings ChatGPT, Codex, and Work
+into one Windows desktop application. This release adapts the installer and RTL
+patch to that `ChatGPT.exe` runtime, with full RTL presentation support for the
+supported rendered text surfaces while code, terminals, and editor tooling stay
+left-to-right.
 
 The tool creates a separate local copy of the installed Codex Desktop
 application, injects RTL presentation logic into that copy, and creates desktop
