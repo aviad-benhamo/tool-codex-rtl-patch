@@ -10,7 +10,8 @@
 #>
 param(
     [switch]$DryRun,
-    [switch]$Launch
+    [switch]$Launch,
+    [switch]$InstallTaskbarShortcutOnly
 )
 
 Set-StrictMode -Version Latest
@@ -24,6 +25,7 @@ $StatePath = Join-Path $InstallRoot 'patch-state.json'
 $DesktopPath = [Environment]::GetFolderPath('Desktop')
 $RtlShortcutPath = Join-Path $DesktopPath 'Codex RTL.lnk'
 $OriginalShortcutPath = Join-Path $DesktopPath 'Codex (Original).lnk'
+$ChatGptShortcutPath = Join-Path $DesktopPath 'ChatGPT.lnk'
 $LegacyShortcutPaths = @(
     (Join-Path $DesktopPath 'Launch Codex RTL.lnk'),
     (Join-Path $DesktopPath 'Launch Codex Original.lnk')
@@ -37,6 +39,9 @@ $ThisDir = if ($ScriptPath) { Split-Path -Parent $ScriptPath } else { (Get-Locat
 $PatchJsSource = Join-Path $ThisDir 'src\codex-rtl-patch.js'
 $LauncherScriptSource = Join-Path $ThisDir 'src\launch-codex.ps1'
 $LauncherScriptPath = Join-Path $InstallRoot 'launch-codex.ps1'
+$TaskbarActivatorSource = Join-Path $ThisDir 'src\activate-chatgpt.ps1'
+$TaskbarActivatorPath = Join-Path $InstallRoot 'activate-chatgpt.ps1'
+$TaskbarAppUserModelId = 'com.openai.codex'
 
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -116,6 +121,12 @@ function Assert-LocalLauncherScript {
     }
 }
 
+function Assert-LocalTaskbarActivator {
+    if (-not (Test-Path -LiteralPath $TaskbarActivatorSource -PathType Leaf)) {
+        throw "Required taskbar activator script was not found: $TaskbarActivatorSource"
+    }
+}
+
 function Install-LauncherScript {
     Assert-LocalLauncherScript
 
@@ -127,6 +138,18 @@ function Install-LauncherScript {
     New-Item -ItemType Directory -Force $InstallRoot | Out-Null
     Copy-Item -LiteralPath $LauncherScriptSource -Destination $LauncherScriptPath -Force
     Write-Ok "Installed launcher script: $LauncherScriptPath"
+}
+
+function Install-TaskbarActivator {
+    Assert-LocalTaskbarActivator
+    if ($DryRun) {
+        Write-Host "DRY RUN copy taskbar activator script to `"$TaskbarActivatorPath`""
+        return
+    }
+
+    New-Item -ItemType Directory -Force $InstallRoot | Out-Null
+    Copy-Item -LiteralPath $TaskbarActivatorSource -Destination $TaskbarActivatorPath -Force
+    Write-Ok "Installed taskbar activator script: $TaskbarActivatorPath"
 }
 
 function Invoke-RobocopyMirror([string]$Source, [string]$Destination) {
@@ -292,10 +315,70 @@ function New-WindowsShortcut {
     }
     $shortcut.Description = $Description
     $shortcut.Save()
+    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut)
+    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
     Write-Ok "Created shortcut: $ShortcutPath"
 }
 
-function New-CodexShortcuts(
+function Set-ShortcutAppUserModelProperties(
+    [string]$ShortcutPath,
+    [string]$AppUserModelId,
+    [string]$RelaunchCommand,
+    [string]$RelaunchDisplayName,
+    [string]$RelaunchIconResource
+) {
+    if ($DryRun) {
+        Write-Host "DRY RUN set AppUserModel properties on `"$ShortcutPath`""
+        return
+    }
+
+    if (-not ('CodexTaskbarShortcutProperties' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
+public struct PROPERTYKEY { public Guid fmtid; public uint pid; public PROPERTYKEY(string f, uint p) { fmtid = new Guid(f); pid = p; } }
+[StructLayout(LayoutKind.Explicit)]
+public struct PROPVARIANT {
+    [FieldOffset(0)] public ushort vt;
+    [FieldOffset(8)] public IntPtr pointerValue;
+    public static PROPVARIANT FromString(string value) { return new PROPVARIANT { vt = 31, pointerValue = Marshal.StringToCoTaskMemUni(value) }; }
+}
+[ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IPropertyStore {
+    int GetCount(out uint count); int GetAt(uint index, out PROPERTYKEY key); int GetValue(ref PROPERTYKEY key, out PROPVARIANT value);
+    int SetValue(ref PROPERTYKEY key, ref PROPVARIANT value); int Commit();
+}
+[ComImport, Guid("0000010b-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IPersistFile {
+    void GetClassID(out Guid classId); void IsDirty(); void Load([MarshalAs(UnmanagedType.LPWStr)] string path, uint mode);
+    void Save([MarshalAs(UnmanagedType.LPWStr)] string path, [MarshalAs(UnmanagedType.Bool)] bool remember); void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string path); void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string path);
+}
+[ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+public class ShellLink { }
+public static class CodexTaskbarShortcutProperties {
+    [DllImport("ole32.dll")] private static extern int PropVariantClear(ref PROPVARIANT value);
+    private static void Set(IPropertyStore store, uint id, string value) {
+        var key = new PROPERTYKEY("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3", id);
+        var propertyValue = PROPVARIANT.FromString(value);
+        try { Marshal.ThrowExceptionForHR(store.SetValue(ref key, ref propertyValue)); } finally { PropVariantClear(ref propertyValue); }
+    }
+    public static void SetTaskbarProperties(string path, string appId, string command, string name, string icon) {
+        var link = (IPersistFile)new ShellLink();
+        link.Load(path, 2);
+        var store = (IPropertyStore)link;
+        try { Set(store, 5, appId); Set(store, 2, command); Set(store, 4, name); Set(store, 3, icon); Marshal.ThrowExceptionForHR(store.Commit()); link.Save(path, true); }
+        finally { Marshal.ReleaseComObject(store); Marshal.ReleaseComObject(link); }
+    }
+}
+'@
+    }
+
+    [CodexTaskbarShortcutProperties]::SetTaskbarProperties($ShortcutPath, $AppUserModelId, $RelaunchCommand, $RelaunchDisplayName, $RelaunchIconResource)
+}
+
+function New-ChatGptShortcut(
     [string]$RtlAppDir,
     [string]$OriginalAppDir,
     [string]$RuntimeExecutableName,
@@ -306,6 +389,65 @@ function New-CodexShortcuts(
         throw "Resolved Codex RTL runtime was not found: $rtlRuntime"
     }
 
+    $rtlIcon = if ($IconRelativePath) { Join-Path $RtlAppDir $IconRelativePath } else { $null }
+    $taskbarIcon = if ($rtlIcon) { $rtlIcon } else { $rtlRuntime }
+
+    Set-ChatGptShortcutTarget $ChatGptShortcutPath $taskbarIcon
+    Update-PinnedTaskbarChatGptShortcuts $rtlRuntime $taskbarIcon
+}
+
+function Set-ChatGptShortcutTarget([string]$ShortcutPath, [string]$TaskbarIcon) {
+    $taskbarArguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$TaskbarActivatorPath`""
+    $taskbarRelaunchCommand = "`"$PowerShellPath`" $taskbarArguments"
+    New-WindowsShortcut `
+        -ShortcutPath $ShortcutPath `
+        -TargetPath $PowerShellPath `
+        -Arguments $taskbarArguments `
+        -WorkingDirectory $InstallRoot `
+        -IconLocation $taskbarIcon `
+        -Description 'Activate the current Codex or ChatGPT Desktop window without restarting it'
+    Set-ShortcutAppUserModelProperties `
+        -ShortcutPath $ShortcutPath `
+        -AppUserModelId $TaskbarAppUserModelId `
+        -RelaunchCommand $taskbarRelaunchCommand `
+        -RelaunchDisplayName 'ChatGPT' `
+        -RelaunchIconResource "$taskbarIcon,0"
+}
+
+function Update-PinnedTaskbarChatGptShortcuts([string]$RtlRuntime, [string]$TaskbarIcon) {
+    $pinnedTaskbarPath = Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'
+    if (-not (Test-Path -LiteralPath $pinnedTaskbarPath -PathType Container)) { return }
+
+    $shell = New-Object -ComObject WScript.Shell
+    try {
+        foreach ($item in Get-ChildItem -LiteralPath $pinnedTaskbarPath -Filter '*.lnk' -File) {
+            $shortcut = $shell.CreateShortcut($item.FullName)
+            try {
+                if (-not $shortcut.TargetPath) {
+                    continue
+                }
+                $targetPath = Resolve-FullPath $shortcut.TargetPath
+                if (-not $targetPath -or -not $targetPath.Equals((Resolve-FullPath $RtlRuntime), [System.StringComparison]::OrdinalIgnoreCase)) {
+                    continue
+                }
+
+                Set-ChatGptShortcutTarget $item.FullName $TaskbarIcon
+                Write-Ok "Updated legacy pinned ChatGPT shortcut: $($item.Name)"
+            } finally {
+                [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut)
+            }
+        }
+    } finally {
+        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
+    }
+}
+
+function New-CodexShortcuts(
+    [string]$RtlAppDir,
+    [string]$OriginalAppDir,
+    [string]$RuntimeExecutableName,
+    [string]$IconRelativePath
+) {
     $rtlIcon = if ($IconRelativePath) { Join-Path $RtlAppDir $IconRelativePath } else { $null }
     $originalIcon = if ($IconRelativePath) { Join-Path $OriginalAppDir $IconRelativePath } else { $null }
     $launcherBaseArguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherScriptPath`""
@@ -325,6 +467,8 @@ function New-CodexShortcuts(
         -WorkingDirectory $InstallRoot `
         -IconLocation $originalIcon `
         -Description 'Open original Codex through the Desktop-safe launcher'
+
+    New-ChatGptShortcut $RtlAppDir $OriginalAppDir $RuntimeExecutableName $IconRelativePath
 }
 
 function Remove-LegacyShortcuts {
@@ -342,6 +486,15 @@ function Remove-LegacyShortcuts {
 function Save-State([object]$Package, [string]$SourceAppDir) {
     if ($DryRun) { return }
     New-Item -ItemType Directory -Force $InstallRoot | Out-Null
+    $lastSelectedVariant = 'Rtl'
+    if (Test-Path -LiteralPath $StatePath -PathType Leaf) {
+        try {
+            $previousState = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
+            if ($previousState.lastSelectedVariant -in @('Rtl', 'Original')) {
+                $lastSelectedVariant = [string]$previousState.lastSelectedVariant
+            }
+        } catch { }
+    }
     $state = [ordered]@{
         patchVersion = $PatchVersion
         installedAt = (Get-Date).ToString('o')
@@ -352,6 +505,7 @@ function Save-State([object]$Package, [string]$SourceAppDir) {
         targetAppDir = $TargetAppDir
         installerScriptPath = $ScriptPath
         repositoryDir = $ThisDir
+        lastSelectedVariant = $lastSelectedVariant
     }
     $json = $state | ConvertTo-Json -Depth 5
     $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
@@ -363,6 +517,8 @@ Assert-LocalPatchFile
 Write-Ok "Using local patch: $PatchJsSource"
 Assert-LocalLauncherScript
 Write-Ok "Using local launcher script: $LauncherScriptSource"
+Assert-LocalTaskbarActivator
+Write-Ok "Using local taskbar activator: $TaskbarActivatorSource"
 
 Write-Step 'Finding installed Codex'
 $pkg = Get-CodexPackage
@@ -378,11 +534,22 @@ Write-Ok "Found Codex $($pkg.Version)"
 Write-Host "Source: $sourceAppDir"
 Write-Host "Runtime: $runtimeExecutableName"
 
+Assert-UnderPath $TargetAppDir $InstallRoot
+if ($InstallTaskbarShortcutOnly) {
+    Write-Step 'Installing ChatGPT taskbar shortcut only'
+    Install-TaskbarActivator
+    New-ChatGptShortcut $TargetAppDir $sourceAppDir $runtimeExecutableName $runtimeIconRelativePath
+    if ($DryRun) {
+        Write-Ok 'Taskbar shortcut dry run completed. No files were changed.'
+    } else {
+        Write-Ok 'ChatGPT taskbar shortcut is installed.'
+    }
+    return
+}
+
 Write-Step 'Checking tools'
 $npx = Get-NpxCommand
 Write-Ok "Using npx: $npx"
-
-Assert-UnderPath $TargetAppDir $InstallRoot
 
 Write-Step 'Copying Codex to a local patchable folder'
 Write-Host "Target: $TargetAppDir"
@@ -390,6 +557,7 @@ Invoke-RobocopyMirror $sourceAppDir $TargetAppDir
 
 Patch-Asar $TargetAppDir $npx
 Install-LauncherScript
+Install-TaskbarActivator
 New-CodexShortcuts $TargetAppDir $sourceAppDir $runtimeExecutableName $runtimeIconRelativePath
 Remove-LegacyShortcuts
 Save-State $pkg $sourceAppDir
@@ -399,7 +567,7 @@ if ($DryRun) {
     Write-Ok 'Dry run completed. No files were changed.'
 } else {
     Write-Ok 'Codex RTL is installed.'
-    Write-Host 'Desktop shortcuts: Codex RTL and Codex (Original)'
+    Write-Host 'Desktop shortcuts: Codex RTL, Codex (Original), and ChatGPT'
     Write-Host 'Both shortcuts preserve unknown Codex processes and only stop recognized Desktop app processes.'
 }
 

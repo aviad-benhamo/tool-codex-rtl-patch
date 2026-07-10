@@ -12,6 +12,11 @@ All notable changes to this project will be documented in this file.
 - Scoped launcher process termination to recognized Codex Desktop app paths so
   unknown Codex processes, including editor extension backends, are preserved.
 
+### Added
+
+- Added a separate `ChatGPT` taskbar shortcut that activates an existing scoped
+  Codex Desktop window without restarting either supported runtime.
+
 ## [0.1.0] - 2026-07-09
 
 ### Added

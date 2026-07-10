@@ -32,15 +32,22 @@ The RTL copy is rebuilt from that official installation.
 
 ## Desktop Shortcuts
 
-There should be two main launchers on the Desktop:
+There should be two selected-variant launchers and one taskbar activation
+shortcut on the Desktop:
 
 * `Codex RTL` — daily-use patched RTL version.
 * `Codex (Original)` — official Codex app used for updates, troubleshooting, and
   comparison.
+* `ChatGPT` — taskbar-friendly entry point that activates the existing Original
+  or RTL window without closing or restarting either runtime. If neither is
+  open, it starts the last selected variant.
 
 Both shortcuts close only recognized Codex Desktop processes before opening the
 selected variant. Unknown Codex processes are preserved by default so tools such
 as VS Code Codex are not disrupted by Desktop switching.
+
+`ChatGPT` is intentionally separate from those two launchers and never performs
+their process-switching behavior.
 
 ## Verify the Official Codex Package
 

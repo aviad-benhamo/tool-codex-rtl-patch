@@ -14,6 +14,7 @@ $DesktopPath = [Environment]::GetFolderPath('Desktop')
 $ShortcutPaths = @(
     (Join-Path $DesktopPath 'Codex RTL.lnk'),
     (Join-Path $DesktopPath 'Codex (Original).lnk'),
+    (Join-Path $DesktopPath 'ChatGPT.lnk'),
     (Join-Path $DesktopPath 'Launch Codex RTL.lnk'),
     (Join-Path $DesktopPath 'Launch Codex Original.lnk')
 )

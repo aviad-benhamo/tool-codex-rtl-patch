@@ -27,7 +27,11 @@ detection, and recovery.
 
 The tool creates a separate local copy of the installed Codex Desktop
 application, injects RTL presentation logic into that copy, and creates desktop
-shortcuts for both the patched and original applications.
+shortcuts for the patched and original applications, plus a taskbar-friendly
+`ChatGPT` activation shortcut.
+
+If an older direct RTL `ChatGPT` shortcut is already pinned to the taskbar, the
+installer updates that pin in place; unrelated ChatGPT shortcuts are not changed.
 
 The patch is intended for Hebrew, Arabic, and mixed-language Codex usage. It
 keeps code blocks, inline code, terminals, editor-like surfaces, and developer
@@ -44,6 +48,8 @@ Store / MSIX installation under `C:\Program Files\WindowsApps`.
   syntax-highlighted content.
 - Composer direction updates while typing.
 - Separate `Codex RTL` and `Codex (Original)` desktop shortcuts.
+- A `ChatGPT` shortcut that activates the existing supported window without
+  terminating or restarting either runtime.
 - Guarded launcher that warns when the official Codex package has changed and
   offers to rebuild the RTL copy with one click.
 - Dry-run install and uninstall scripts.
@@ -99,6 +105,9 @@ After installation:
 - Use `Codex RTL` for the patched RTL copy.
 - Use `Codex (Original)` for Microsoft Store updates, troubleshooting, and
   comparison with the unpatched application.
+- Pin `ChatGPT` to the taskbar when you want one entry point that activates the
+  currently open Original or RTL window. It remembers the last selected variant
+  when neither runtime is open.
 - Re-run `install.ps1` after Codex Desktop updates.
 
 To remove the patched copy:
@@ -199,7 +208,8 @@ Runtime flow:
 4. `src/codex-rtl-patch.js` is copied into the extracted webview assets.
 5. `webview/index.html` is patched to load the RTL script.
 6. The ASAR is repacked in the local copy.
-7. Desktop shortcuts are created for `Codex RTL` and `Codex (Original)`.
+7. Desktop shortcuts are created for `Codex RTL`, `Codex (Original)`, and
+   `ChatGPT`. The `ChatGPT` shortcut is a no-kill taskbar activation entry point.
 8. `src/launch-codex.ps1` stops only recognized Codex Desktop processes before
    launching the selected variant.
 9. When launching `Codex RTL`, the launcher compares the official Codex version

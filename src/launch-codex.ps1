@@ -279,6 +279,23 @@ function Update-PatchStateInstallerPath([object]$State, [string]$InstallerScript
     [System.IO.File]::WriteAllText($statePath, $json + "`n", $utf8NoBom)
 }
 
+function Save-LastSelectedVariant([string]$Variant) {
+    $state = Read-PatchState
+    if (-not $state -or $Variant -notin @('Rtl', 'Original')) {
+        return
+    }
+
+    if (-not ($state.PSObject.Properties.Name -contains 'lastSelectedVariant')) {
+        $state | Add-Member -NotePropertyName lastSelectedVariant -NotePropertyValue $Variant
+    } else {
+        $state.lastSelectedVariant = $Variant
+    }
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    $json = $state | ConvertTo-Json -Depth 5
+    [System.IO.File]::WriteAllText($statePath, $json + "`n", $utf8NoBom)
+}
+
 function Start-Rtl {
     $rtlRuntime = Resolve-CodexRuntimeExecutable $rtlAppDir
     Start-Process -FilePath $rtlRuntime -WorkingDirectory $rtlAppDir
@@ -378,10 +395,12 @@ if ($Variant -eq 'Rtl') {
         return
     }
 
+    Save-LastSelectedVariant $Variant
     Stop-CodexDesktopProcesses
     Start-Rtl
     return
 }
 
+Save-LastSelectedVariant $Variant
 Stop-CodexDesktopProcesses
 Start-Process -FilePath (Join-Path $env:WINDIR 'explorer.exe') -ArgumentList $originalShellTarget

@@ -33,6 +33,7 @@ The expected paths are:
 %LOCALAPPDATA%\OpenAI\CodexRtl
 <Desktop>\Codex RTL.lnk
 <Desktop>\Codex (Original).lnk
+<Desktop>\ChatGPT.lnk
 ```
 
 4. Run the uninstaller:
@@ -56,6 +57,7 @@ $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcuts = @(
     (Join-Path $desktop 'Codex RTL.lnk'),
     (Join-Path $desktop 'Codex (Original).lnk'),
+    (Join-Path $desktop 'ChatGPT.lnk'),
     (Join-Path $desktop 'Launch Codex RTL.lnk'),
     (Join-Path $desktop 'Launch Codex Original.lnk')
 )
@@ -73,6 +75,7 @@ The Windows uninstaller removes:
 %LOCALAPPDATA%\OpenAI\CodexRtl\patch-state.json
 <Desktop>\Codex RTL.lnk
 <Desktop>\Codex (Original).lnk
+<Desktop>\ChatGPT.lnk
 ```
 
 It also removes older duplicate `Launch Codex ...` shortcuts if they are still
@@ -164,6 +167,7 @@ $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcuts = @(
     (Join-Path $desktop 'Codex RTL.lnk'),
     (Join-Path $desktop 'Codex (Original).lnk'),
+    (Join-Path $desktop 'ChatGPT.lnk'),
     (Join-Path $desktop 'Launch Codex RTL.lnk'),
     (Join-Path $desktop 'Launch Codex Original.lnk')
 )
@@ -210,7 +214,8 @@ After uninstalling the patched copy:
 1. Open Codex Desktop from the Windows Start menu, not from `Codex RTL`.
 2. Confirm the regular app launches.
 3. Confirm your account and expected workspace are available.
-4. Verify the `Codex RTL` and `Codex (Original)` desktop shortcuts are gone.
+4. Verify the `Codex RTL`, `Codex (Original)`, and `ChatGPT` desktop shortcuts
+   are gone.
 
 The patch does not create a separate Codex account or intentionally replace
 Codex user data. The official and patched executables may use the same existing
