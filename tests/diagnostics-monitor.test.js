@@ -17,6 +17,8 @@ assert.match(monitor, /Application Error', 'Windows Error Reporting/);
 assert.match(monitor, /Get-WinEvent -FilterHashtable/);
 assert.match(monitor, /Get-CimInstance Win32_Process/);
 assert.match(monitor, /ChatGPT\.exe', 'Codex\.exe/);
+assert.match(monitor, /StartsWith\(\$parentFull \+ '\\'/);
+assert.doesNotMatch(monitor, /\$parentFull \+ '\\\\'/);
 assert.match(monitor, /\$previousProcessState = '__uninitialized__'/);
 assert.match(monitor, /CrashDumps/);
 assert.match(monitor, /copied = \$false/);

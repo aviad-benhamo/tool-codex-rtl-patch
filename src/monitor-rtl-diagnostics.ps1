@@ -69,14 +69,14 @@ function Test-UnderPath([string]$Child, [string]$Parent) {
     }
 
     try {
-        $childFull = [System.IO.Path]::GetFullPath($Child).TrimEnd('\\')
-        $parentFull = [System.IO.Path]::GetFullPath($Parent).TrimEnd('\\')
+        $childFull = [System.IO.Path]::GetFullPath($Child).TrimEnd('\')
+        $parentFull = [System.IO.Path]::GetFullPath($Parent).TrimEnd('\')
     } catch {
         return $false
     }
 
     return $childFull.Equals($parentFull, [System.StringComparison]::OrdinalIgnoreCase) -or
-        $childFull.StartsWith($parentFull + '\\', [System.StringComparison]::OrdinalIgnoreCase)
+        $childFull.StartsWith($parentFull + '\', [System.StringComparison]::OrdinalIgnoreCase)
 }
 
 function Get-RtlProcesses {
