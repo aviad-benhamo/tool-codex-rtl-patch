@@ -96,10 +96,51 @@ From the local repository clone, run:
 ```powershell
 node .\tests\rtl-direction.test.js
 node .\tests\launcher-guard.test.js
+node .\tests\diagnostics-monitor.test.js
 ```
 
 Expected results should indicate that the direction tests and launcher guard
 tests passed.
+
+## Temporarily Capture RTL Diagnostics
+
+Use the diagnostic monitor only when you are about to reproduce a suspected RTL
+problem or when an unclear problem has started. It is a separate foreground
+PowerShell process: it never starts, stops, rebuilds, or modifies Codex.
+It runs directly from this repository clone, so adding or using it does not
+require rebuilding the installed RTL copy.
+
+Start it in a separate PowerShell window before reproducing the problem:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\src\monitor-rtl-diagnostics.ps1
+```
+
+The default monitor duration is two hours. While it is running, use Codex RTL
+normally or perform the suspected reproduction, such as opening the in-app
+browser. Stop it with `Ctrl+C` once the test is over. To choose a shorter or
+longer bounded session, use a duration from 1 to 480 minutes:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\src\monitor-rtl-diagnostics.ps1 -DurationMinutes 30
+```
+
+Each run is written locally under:
+
+```text
+%LOCALAPPDATA%\OpenAI\CodexRtl\diagnostics\run-YYYYMMDD-HHMMSS
+```
+
+The run folder contains the RTL process-state transitions, official and patched
+version metadata, matching Windows `Application Error` and `Windows Error
+Reporting` events, and metadata for any new Codex/ChatGPT crash dump. It does
+not collect prompts, conversations, browser page contents, cookies, history,
+network traffic, process command lines, or crash-dump bytes.
+
+If a crash occurs, leave the monitor window open long enough for one polling
+interval (ten seconds by default), then stop it. Keep the run folder for review
+and do not share it externally before checking the paths and error text it
+contains.
 
 ## Manual Dry Run
 

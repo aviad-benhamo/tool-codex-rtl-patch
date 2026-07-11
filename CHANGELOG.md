@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added an opt-in, local-only RTL diagnostics monitor that records scoped
+  process, version, Windows event, and crash-dump metadata during a bounded
+  troubleshooting session without collecting Codex or browser content.
+
 ## [0.2.0] - 2026-07-10
 
 ### Fixed

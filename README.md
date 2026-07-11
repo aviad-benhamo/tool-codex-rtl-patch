@@ -58,6 +58,8 @@ Store / MSIX installation under `C:\Program Files\WindowsApps`.
   terminating or restarting either runtime.
 - Guarded launcher that warns when the official Codex package has changed and
   offers to rebuild the RTL copy with one click.
+- Optional local diagnostics monitor for temporarily recording RTL process and
+  Windows crash metadata during a reproducible problem.
 - Dry-run install and uninstall scripts.
 - Recovery documentation for returning to the official Codex application.
 
@@ -122,6 +124,9 @@ To remove the patched copy:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1 -DryRun
 powershell -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
+
+For temporary diagnostic capture during a suspected crash, see
+[the maintenance guide](docs/WEEKLY-MAINTENANCE.md#temporarily-capture-rtl-diagnostics).
 
 ## Configuration
 
