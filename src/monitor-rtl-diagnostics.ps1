@@ -33,6 +33,7 @@ $runId = $startedAt.ToString('yyyyMMdd-HHmmss')
 $runDir = Join-Path $OutputRoot "run-$runId"
 $eventsPath = Join-Path $runDir 'application-events.jsonl'
 $processesPath = Join-Path $runDir 'rtl-processes.jsonl'
+$processStopsPath = Join-Path $runDir 'rtl-process-stops.jsonl'
 $dumpsPath = Join-Path $runDir 'crash-dumps.jsonl'
 $contextPath = Join-Path $runDir 'context.json'
 $statusPath = Join-Path $runDir 'status.json'
@@ -40,8 +41,25 @@ $seenEventIds = [System.Collections.Generic.HashSet[long]]::new()
 $seenDumpStates = @{}
 $previousProcessState = '__uninitialized__'
 $eventCollectionErrorLogged = $false
+$trackedRtlProcessIds = [System.Collections.Generic.HashSet[int]]::new()
+$trackedRtlProcessHandles = @{}
+$trackedRtlProcessMetadata = @{}
+$loggedStoppedProcessIds = [System.Collections.Generic.HashSet[int]]::new()
+$processStopSourceId = "CodexRtlDiagnostics-$runId-$PID"
+$processStopJob = $null
+$processStopTraceError = $null
 
 New-Item -ItemType Directory -Path $runDir -Force | Out-Null
+
+try {
+    $processStopJob = Register-WmiEvent `
+        -Class Win32_ProcessStopTrace `
+        -SourceIdentifier $processStopSourceId `
+        -ErrorAction Stop
+} catch {
+    $processStopJob = $null
+    $processStopTraceError = $_.Exception.Message
+}
 
 function ConvertTo-RedactedText([string]$Value) {
     if ($null -eq $Value) {
@@ -97,6 +115,7 @@ function Get-RtlProcesses {
                     name = $_.Name
                     executablePath = ConvertTo-RedactedText $_.ExecutablePath
                     creationDate = $_.CreationDate
+                    parentProcessId = $_.ParentProcessId
                 }
             } |
             Sort-Object processId
@@ -176,6 +195,9 @@ function Write-Context {
                 'crash-dump file bytes'
             )
         }
+        processStopTraceEnabled = $null -ne $processStopJob
+        processStopTraceError = ConvertTo-RedactedText $processStopTraceError
+        processExitCodePollingEnabled = $true
     }
     $context | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $contextPath -Encoding utf8
 }
@@ -191,6 +213,34 @@ function Write-Status([string]$State, [string]$Reason) {
 
 function Capture-RtlProcessState {
     $processes = @(Get-RtlProcesses)
+    foreach ($process in $processes) {
+        $processId = [int]$process.processId
+        $trackedRtlProcessIds.Add($processId) | Out-Null
+        $existingHandle = $trackedRtlProcessHandles[$processId]
+        $replaceHandle = $null -eq $existingHandle
+        if ($existingHandle) {
+            try {
+                $replaceHandle = $existingHandle.HasExited
+            } catch {
+                $replaceHandle = $true
+            }
+        }
+
+        if ($replaceHandle) {
+            if ($existingHandle) {
+                $existingHandle.Dispose()
+            }
+            try {
+                $trackedRtlProcessHandles[$processId] = [System.Diagnostics.Process]::GetProcessById($processId)
+                $trackedRtlProcessMetadata[$processId] = [PSCustomObject]@{
+                    processName = [string]$process.name
+                    parentProcessId = [int]$process.parentProcessId
+                }
+                $loggedStoppedProcessIds.Remove($processId) | Out-Null
+            } catch { }
+        }
+    }
+
     $stateJson = $processes | ConvertTo-Json -Compress -Depth 4
     if ($stateJson -ne $previousProcessState) {
         Write-JsonLine -Path $processesPath -Value ([PSCustomObject]@{
@@ -198,6 +248,55 @@ function Capture-RtlProcessState {
             processes = $processes
         })
         $script:previousProcessState = $stateJson
+    }
+}
+
+function Capture-RtlProcessStops {
+    $events = @()
+    if ($processStopJob) {
+        $events = @(Get-Event -SourceIdentifier $processStopSourceId -ErrorAction SilentlyContinue)
+    }
+    foreach ($event in $events) {
+        try {
+            $trace = $event.SourceEventArgs.NewEvent
+            $processId = [int]$trace.ProcessID
+            if ($trackedRtlProcessIds.Contains($processId) -and $loggedStoppedProcessIds.Add($processId)) {
+                Write-JsonLine -Path $processStopsPath -Value ([PSCustomObject]@{
+                    capturedAt = $event.TimeGenerated.ToString('o')
+                    processId = $processId
+                    parentProcessId = [int]$trace.ParentProcessID
+                    processName = [string]$trace.ProcessName
+                    exitStatus = [uint32]$trace.ExitStatus
+                    source = 'Win32_ProcessStopTrace'
+                })
+            }
+        } finally {
+            Remove-Event -EventIdentifier $event.EventIdentifier -ErrorAction SilentlyContinue
+        }
+    }
+
+    foreach ($processId in @($trackedRtlProcessHandles.Keys)) {
+        if ($loggedStoppedProcessIds.Contains([int]$processId)) {
+            continue
+        }
+
+        $processHandle = $trackedRtlProcessHandles[$processId]
+        try {
+            if (-not $processHandle.HasExited) {
+                continue
+            }
+
+            $metadata = $trackedRtlProcessMetadata[$processId]
+            Write-JsonLine -Path $processStopsPath -Value ([PSCustomObject]@{
+                capturedAt = (Get-Date).ToString('o')
+                processId = [int]$processId
+                parentProcessId = if ($metadata) { [int]$metadata.parentProcessId } else { $null }
+                processName = if ($metadata) { [string]$metadata.processName } else { [string]$processHandle.ProcessName }
+                exitStatus = [int]$processHandle.ExitCode
+                source = 'ProcessHandle'
+            })
+            $loggedStoppedProcessIds.Add([int]$processId) | Out-Null
+        } catch { }
     }
 }
 
@@ -277,6 +376,7 @@ $deadline = $startedAt.AddMinutes($DurationMinutes)
 try {
     while ((Get-Date) -lt $deadline) {
         Capture-RtlProcessState
+        Capture-RtlProcessStops
         Capture-ApplicationEvents
         Capture-CrashDumpMetadata
         Start-Sleep -Seconds $PollIntervalSeconds
@@ -284,6 +384,15 @@ try {
 
     Write-Status -State 'completed' -Reason 'Configured duration elapsed.'
 } finally {
+    Capture-RtlProcessStops
+    if ($processStopJob) {
+        Unregister-Event -SourceIdentifier $processStopSourceId -ErrorAction SilentlyContinue
+        Remove-Job -Id $processStopJob.Id -Force -ErrorAction SilentlyContinue
+    }
+    foreach ($processHandle in $trackedRtlProcessHandles.Values) {
+        $processHandle.Dispose()
+    }
+
     if (Test-Path -LiteralPath $statusPath) {
         $status = Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json
         if ($status.state -eq 'running') {

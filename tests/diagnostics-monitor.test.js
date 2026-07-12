@@ -16,6 +16,20 @@ assert.match(monitor, /\[int\]\$PollIntervalSeconds = 10/);
 assert.match(monitor, /Application Error', 'Windows Error Reporting/);
 assert.match(monitor, /Get-WinEvent -FilterHashtable/);
 assert.match(monitor, /Get-CimInstance Win32_Process/);
+assert.match(monitor, /Register-WmiEvent/);
+assert.match(monitor, /Win32_ProcessStopTrace/);
+assert.match(monitor, /rtl-process-stops\.jsonl/);
+assert.match(monitor, /exitStatus = \[uint32\]\$trace\.ExitStatus/);
+assert.match(monitor, /\[System\.Diagnostics\.Process\]::GetProcessById/);
+assert.match(monitor, /exitStatus = \[int\]\$processHandle\.ExitCode/);
+assert.match(monitor, /source = 'ProcessHandle'/);
+assert.match(monitor, /processExitCodePollingEnabled = \$true/);
+assert.match(monitor, /processStopTraceError = ConvertTo-RedactedText \$processStopTraceError/);
+assert.doesNotMatch(
+  monitor,
+  /catch \{\s*\$processStopJob = \$null\s*\$processStopTraceError = ConvertTo-RedactedText/
+);
+assert.match(monitor, /Unregister-Event/);
 assert.match(monitor, /ChatGPT\.exe', 'Codex\.exe/);
 assert.match(monitor, /StartsWith\(\$parentFull \+ '\\'/);
 assert.doesNotMatch(monitor, /\$parentFull \+ '\\\\'/);

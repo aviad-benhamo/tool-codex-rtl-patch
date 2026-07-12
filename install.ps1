@@ -241,10 +241,114 @@ function Patch-IndexHtml([string]$ExtractDir) {
     Write-Ok 'Patched webview/index.html'
 }
 
+function Get-AsarUnpackedEntries([string]$AsarPath, [string]$Npx) {
+    $listOutput = @(& $Npx --yes $AsarPackage list --is-pack $AsarPath)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not inspect ASAR unpack metadata: $AsarPath"
+    }
+
+    return @(
+        $listOutput |
+            ForEach-Object {
+                if ($_ -match '^unpack\s*:\s*\\(.+)$') {
+                    $matches[1]
+                }
+            } |
+            Where-Object { $_ } |
+            Sort-Object -Unique
+    )
+}
+
+function ConvertTo-AsarGlob([string[]]$Paths) {
+    $normalized = @(
+        $Paths |
+            Where-Object { $_ } |
+            ForEach-Object { $_.Replace('\', '/').TrimStart('/') } |
+            Sort-Object -Unique
+    )
+
+    if ($normalized.Count -eq 0) {
+        return $null
+    }
+    if ($normalized.Count -eq 1) {
+        return $normalized[0]
+    }
+
+    return '{' + ($normalized -join ',') + '}'
+}
+
+function ConvertTo-AsarFileGlob([string[]]$Paths) {
+    return ConvertTo-AsarGlob @(
+        $Paths |
+            ForEach-Object { Split-Path -Leaf $_ }
+    )
+}
+
+function Get-AsarUnpackPatterns([string[]]$UnpackedEntries, [string]$ExtractDir) {
+    $unpackedDirs = @()
+    $unpackedFiles = @()
+
+    foreach ($entry in $UnpackedEntries) {
+        $relativePath = $entry.Replace('\', [System.IO.Path]::DirectorySeparatorChar)
+        $extractedPath = Join-Path $ExtractDir $relativePath
+        if (Test-Path -LiteralPath $extractedPath -PathType Container) {
+            $unpackedDirs += $entry
+        } elseif (Test-Path -LiteralPath $extractedPath -PathType Leaf) {
+            $unpackedFiles += $entry
+        } else {
+            throw "An unpacked ASAR entry was not extracted: $entry"
+        }
+    }
+
+    $rootDirs = @(
+        $unpackedDirs |
+            Where-Object {
+                $candidate = $_
+                -not ($unpackedDirs | Where-Object {
+                    $_ -ne $candidate -and
+                    $candidate.StartsWith($_.TrimEnd('\') + '\', [System.StringComparison]::OrdinalIgnoreCase)
+                })
+            }
+    )
+
+    $standaloneFiles = @(
+        $unpackedFiles |
+            Where-Object {
+                $candidate = $_
+                -not ($rootDirs | Where-Object {
+                    $candidate.StartsWith($_.TrimEnd('\') + '\', [System.StringComparison]::OrdinalIgnoreCase)
+                })
+            }
+    )
+
+    return [PSCustomObject]@{
+        # @electron/asar matches --unpack against the basename on Windows.
+        # The exact post-pack comparison below rejects any accidental extra match.
+        unpack = ConvertTo-AsarFileGlob $standaloneFiles
+        unpackDir = ConvertTo-AsarGlob $rootDirs
+    }
+}
+
+function Assert-AsarUnpackedEntriesPreserved(
+    [string[]]$Expected,
+    [string[]]$Actual
+) {
+    $difference = @(Compare-Object -ReferenceObject @($Expected) -DifferenceObject @($Actual))
+    if ($difference.Count -gt 0) {
+        $summary = ($difference | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" }) -join '; '
+        throw "ASAR unpack metadata changed while applying the RTL patch: $summary"
+    }
+}
+
 function Patch-Asar([string]$AppDir, [string]$Npx) {
     $asarPath = Join-Path $AppDir 'resources\app.asar'
     if ((-not $DryRun) -and (-not (Test-Path -LiteralPath $asarPath))) {
         throw "app.asar was not found in target app: $asarPath"
+    }
+
+    $originalUnpackedEntries = @()
+    if (-not $DryRun) {
+        $originalUnpackedEntries = @(Get-AsarUnpackedEntries $asarPath $Npx)
     }
 
     $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('codex-rtl-asar-' + [guid]::NewGuid().ToString('N'))
@@ -269,10 +373,24 @@ function Patch-Asar([string]$AppDir, [string]$Npx) {
 
         Write-Step 'Packing patched app.asar'
         if ($DryRun) {
-            Write-Host "DRY RUN $Npx --yes $AsarPackage pack `"$tempRoot`" `"$asarPath`""
+            Write-Host "DRY RUN $Npx --yes $AsarPackage pack [preserving official unpack metadata] `"$tempRoot`" `"$asarPath`""
         } else {
-            & $Npx --yes $AsarPackage pack $tempRoot $asarPath
+            $unpackPatterns = Get-AsarUnpackPatterns $originalUnpackedEntries $tempRoot
+            $packArguments = @('--yes', $AsarPackage, 'pack')
+            if ($unpackPatterns.unpack) {
+                $packArguments += @('--unpack', $unpackPatterns.unpack)
+            }
+            if ($unpackPatterns.unpackDir) {
+                $packArguments += @('--unpack-dir', $unpackPatterns.unpackDir)
+            }
+            $packArguments += @($tempRoot, $asarPath)
+
+            & $Npx @packArguments
             if ($LASTEXITCODE -ne 0) { throw 'asar pack failed' }
+
+            $patchedUnpackedEntries = @(Get-AsarUnpackedEntries $asarPath $Npx)
+            Assert-AsarUnpackedEntriesPreserved $originalUnpackedEntries $patchedUnpackedEntries
+            Write-Ok "Preserved $($patchedUnpackedEntries.Count) unpacked ASAR entries"
         }
     } finally {
         if ((-not $DryRun) -and (Test-Path -LiteralPath $tempRoot)) {

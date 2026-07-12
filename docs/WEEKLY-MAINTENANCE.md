@@ -133,7 +133,9 @@ Each run is written locally under:
 
 The run folder contains the RTL process-state transitions, official and patched
 version metadata, matching Windows `Application Error` and `Windows Error
-Reporting` events, and metadata for any new Codex/ChatGPT crash dump. It does
+Reporting` events, process-stop exit codes and parent process IDs when Windows
+process tracing is available (with process-handle polling as the non-admin
+fallback), and metadata for any new Codex/ChatGPT crash dump. It does
 not collect prompts, conversations, browser page contents, cookies, history,
 network traffic, process command lines, or crash-dump bytes.
 

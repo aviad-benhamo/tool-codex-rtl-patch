@@ -191,6 +191,7 @@ and Codex RTL.
 |-- assets/
 |   `-- screenshots/
 |-- docs/
+|   |-- BROWSER-USE-COMPATIBILITY-INVESTIGATION.md
 |   |-- RECOVERY.md
 |   `-- WEEKLY-MAINTENANCE.md
 |-- CHANGELOG.md
@@ -262,6 +263,7 @@ Manual regression checklist:
 
 Additional documentation:
 
+- [Browser Use compatibility investigation](docs/BROWSER-USE-COMPATIBILITY-INVESTIGATION.md)
 - [Recovery procedure](docs/RECOVERY.md)
 - [Weekly maintenance guide](docs/WEEKLY-MAINTENANCE.md)
 - [Security policy](SECURITY.md)

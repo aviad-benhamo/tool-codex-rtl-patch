@@ -128,6 +128,14 @@ assert.match(installer, /\$sourceRuntime = Resolve-CodexRuntimeExecutable \$sour
 assert.match(installer, /\$targetRuntime = Resolve-CodexRuntimeExecutable \$TargetAppDir/);
 assert.match(installer, /Start-Process -FilePath \$targetRuntime -WorkingDirectory \$TargetAppDir/);
 assert.match(installer, /resources\\icon-chatgpt\.ico', 'resources\\icon\.ico/);
+assert.match(installer, /function Get-AsarUnpackedEntries/);
+assert.match(installer, /list --is-pack/);
+assert.match(installer, /function Get-AsarUnpackPatterns/);
+assert.match(installer, /function ConvertTo-AsarFileGlob/);
+assert.match(installer, /matches --unpack against the basename on Windows/);
+assert.match(installer, /--unpack-dir/);
+assert.match(installer, /function Assert-AsarUnpackedEntriesPreserved/);
+assert.match(installer, /Preserved \$\(\$patchedUnpackedEntries\.Count\) unpacked ASAR entries/);
 
 assert.doesNotMatch(rtlPatch, /patch-state\.json|installerScriptPath|Get-AppxPackage/);
 

@@ -4,11 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserved the official ASAR `unpacked` metadata while injecting the RTL
+  renderer asset, with an exact post-pack integrity check for native resources.
+
 ### Added
 
+- Added a Browser Use compatibility investigation record with the tested
+  hypotheses, reverted experiments, current operating guidance, and an
+  update-revalidation checklist.
 - Added an opt-in, local-only RTL diagnostics monitor that records scoped
   process, version, Windows event, and crash-dump metadata during a bounded
   troubleshooting session without collecting Codex or browser content.
+- Added scoped Windows process-stop tracing to the diagnostics monitor so
+  unexpected RTL exits can be correlated with exit codes and parent PIDs.
 
 ## [0.2.0] - 2026-07-10
 
