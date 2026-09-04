@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Updated the embedded Electron ASAR header hash in the copied Windows runtime
+  after repacking, preserving integrity validation and preventing immediate
+  startup termination in Codex Desktop builds that enforce ASAR integrity.
 - Preserved the official ASAR `unpacked` metadata while injecting the RTL
   renderer asset, with an exact post-pack integrity check for native resources.
 

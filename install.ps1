@@ -37,6 +37,7 @@ $OriginalShellTarget = "shell:AppsFolder\$OriginalAppUserModelId"
 $ScriptPath = $MyInvocation.MyCommand.Path
 $ThisDir = if ($ScriptPath) { Split-Path -Parent $ScriptPath } else { (Get-Location).Path }
 $PatchJsSource = Join-Path $ThisDir 'src\codex-rtl-patch.js'
+$AsarIntegrityUpdaterSource = Join-Path $ThisDir 'src\update-asar-integrity.ps1'
 $LauncherScriptSource = Join-Path $ThisDir 'src\launch-codex.ps1'
 $LauncherScriptPath = Join-Path $InstallRoot 'launch-codex.ps1'
 $TaskbarActivatorSource = Join-Path $ThisDir 'src\activate-chatgpt.ps1'
@@ -112,6 +113,12 @@ function Get-NpxCommand {
 function Assert-LocalPatchFile {
     if (-not (Test-Path -LiteralPath $PatchJsSource -PathType Leaf)) {
         throw "Required local patch file was not found: $PatchJsSource. Restore src\codex-rtl-patch.js in this repository and rerun the installer. Remote downloads are disabled."
+    }
+}
+
+function Assert-LocalAsarIntegrityUpdater {
+    if (-not (Test-Path -LiteralPath $AsarIntegrityUpdaterSource -PathType Leaf)) {
+        throw "Required ASAR integrity updater was not found: $AsarIntegrityUpdaterSource"
     }
 }
 
@@ -601,7 +608,11 @@ function Remove-LegacyShortcuts {
     }
 }
 
-function Save-State([object]$Package, [string]$SourceAppDir) {
+function Save-State(
+    [object]$Package,
+    [string]$SourceAppDir,
+    [object]$AsarIntegrityResult
+) {
     if ($DryRun) { return }
     New-Item -ItemType Directory -Force $InstallRoot | Out-Null
     $lastSelectedVariant = 'Rtl'
@@ -624,6 +635,10 @@ function Save-State([object]$Package, [string]$SourceAppDir) {
         installerScriptPath = $ScriptPath
         repositoryDir = $ThisDir
         lastSelectedVariant = $lastSelectedVariant
+        asarIntegrityAction = [string]$AsarIntegrityResult.action
+        sourceAsarHeaderSha256 = [string]$AsarIntegrityResult.sourceAsarHeaderSha256
+        patchedAsarHeaderSha256 = [string]$AsarIntegrityResult.patchedAsarHeaderSha256
+        patchedAsarSha256 = (Get-FileHash -LiteralPath (Join-Path $TargetAppDir 'resources\app.asar') -Algorithm SHA256).Hash
     }
     $json = $state | ConvertTo-Json -Depth 5
     $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
@@ -633,6 +648,8 @@ function Save-State([object]$Package, [string]$SourceAppDir) {
 Write-Step 'Checking local patch file'
 Assert-LocalPatchFile
 Write-Ok "Using local patch: $PatchJsSource"
+Assert-LocalAsarIntegrityUpdater
+Write-Ok "Using ASAR integrity updater: $AsarIntegrityUpdaterSource"
 Assert-LocalLauncherScript
 Write-Ok "Using local launcher script: $LauncherScriptSource"
 Assert-LocalTaskbarActivator
@@ -674,11 +691,27 @@ Write-Host "Target: $TargetAppDir"
 Invoke-RobocopyMirror $sourceAppDir $TargetAppDir
 
 Patch-Asar $TargetAppDir $npx
+$targetRuntime = Resolve-CodexRuntimeExecutable $TargetAppDir
+Write-Step 'Updating embedded ASAR integrity metadata'
+if ($DryRun) {
+    Write-Host "DRY RUN update embedded ASAR integrity metadata in `"$targetRuntime`""
+    $asarIntegrityResult = [PSCustomObject]@{
+        action = 'WouldInspect'
+        sourceAsarHeaderSha256 = ''
+        patchedAsarHeaderSha256 = ''
+    }
+} else {
+    $asarIntegrityResult = & $AsarIntegrityUpdaterSource `
+        -SourceAsarPath $sourceAsar `
+        -PatchedAsarPath (Join-Path $TargetAppDir 'resources\app.asar') `
+        -RuntimeExecutablePath $targetRuntime
+    Write-Ok "Embedded ASAR integrity action: $($asarIntegrityResult.action)"
+}
 Install-LauncherScript
 Install-TaskbarActivator
 New-CodexShortcuts $TargetAppDir $sourceAppDir $runtimeExecutableName $runtimeIconRelativePath
 Remove-LegacyShortcuts
-Save-State $pkg $sourceAppDir
+Save-State $pkg $sourceAppDir $asarIntegrityResult
 
 Write-Step 'Done'
 if ($DryRun) {

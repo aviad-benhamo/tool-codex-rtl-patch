@@ -141,6 +141,13 @@ repository:
 - Local install root: `%LOCALAPPDATA%\OpenAI\CodexRtl`
 - ASAR tool: `npx --yes @electron/asar@4.2.0`
 
+For Electron builds that enable embedded ASAR integrity validation, the
+installer also updates the expected ASAR header hash in the copied runtime.
+Integrity validation remains enabled and the official Microsoft Store runtime
+is not modified. Updating a PE resource invalidates the publisher signature on
+the local copied executable; the official executable remains signed and
+unchanged.
+
 The absence of `.env.example` is intentional because the project has no runtime
 environment variables or secret configuration.
 
@@ -220,11 +227,14 @@ Runtime flow:
 4. `src/codex-rtl-patch.js` is copied into the extracted webview assets.
 5. `webview/index.html` is patched to load the RTL script.
 6. The ASAR is repacked in the local copy.
-7. Desktop shortcuts are created for `Codex RTL`, `Codex (Original)`, and
+7. If the runtime enforces embedded ASAR integrity, the copied executable's
+   expected header hash is updated to match the patched ASAR without disabling
+   integrity validation.
+8. Desktop shortcuts are created for `Codex RTL`, `Codex (Original)`, and
    `ChatGPT`. The `ChatGPT` shortcut is a no-kill taskbar activation entry point.
-8. `src/launch-codex.ps1` stops only recognized Codex Desktop processes before
+9. `src/launch-codex.ps1` stops only recognized Codex Desktop processes before
    launching the selected variant.
-9. When launching `Codex RTL`, the launcher compares the official Codex version
+10. When launching `Codex RTL`, the launcher compares the official Codex version
    with the recorded RTL source version and displays a rebuild prompt when the
    official app has changed.
 
