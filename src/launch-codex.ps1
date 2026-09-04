@@ -165,6 +165,7 @@ function Test-InstallerScript([string]$ScriptPath) {
     $repoDir = Split-Path -Parent $ScriptPath
     $requiredPaths = @(
         (Join-Path $repoDir 'src\codex-rtl-patch.js'),
+        (Join-Path $repoDir 'src\update-asar-integrity.ps1'),
         (Join-Path $repoDir 'src\launch-codex.ps1')
     )
 

@@ -136,6 +136,12 @@ assert.match(installer, /matches --unpack against the basename on Windows/);
 assert.match(installer, /--unpack-dir/);
 assert.match(installer, /function Assert-AsarUnpackedEntriesPreserved/);
 assert.match(installer, /Preserved \$\(\$patchedUnpackedEntries\.Count\) unpacked ASAR entries/);
+assert.match(installer, /src\\update-asar-integrity\.ps1/);
+assert.match(installer, /Updating embedded ASAR integrity metadata/);
+assert.match(installer, /sourceAsarHeaderSha256/);
+assert.match(installer, /patchedAsarHeaderSha256/);
+assert.match(installer, /patchedAsarSha256/);
+assert.match(launcher, /src\\update-asar-integrity\.ps1/);
 
 assert.doesNotMatch(rtlPatch, /patch-state\.json|installerScriptPath|Get-AppxPackage/);
 
