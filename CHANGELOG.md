@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Elevated the automatic RTL rebuild after a Codex Desktop update so its
+  package-identity registration can complete instead of failing with exit code
+  1 when launched from a standard user shortcut.
 - Registered a per-user sparse MSIX identity for the copied RTL runtime and
   launched it through its AppUserModelID, preventing the current Codex Desktop
   build from failing with `The process has no package identity`.
