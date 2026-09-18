@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Registered a per-user sparse MSIX identity for the copied RTL runtime and
+  launched it through its AppUserModelID, preventing the current Codex Desktop
+  build from failing with `The process has no package identity`.
 - Updated the embedded Electron ASAR header hash in the copied Windows runtime
   after repacking, preserving integrity validation and preventing immediate
   startup termination in Codex Desktop builds that enforce ASAR integrity.

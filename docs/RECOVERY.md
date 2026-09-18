@@ -66,7 +66,14 @@ Test-Path -LiteralPath $installRoot
 $shortcuts | ForEach-Object { Test-Path -LiteralPath $_ }
 ```
 
-All four results should be `False`.
+All results should be `False`. Also confirm that the local package identity is
+gone:
+
+```powershell
+Get-AppxPackage -Name CodexRtl.Local -ErrorAction SilentlyContinue
+```
+
+The command should return no package.
 
 The Windows uninstaller removes:
 
@@ -80,6 +87,10 @@ The Windows uninstaller removes:
 
 It also removes older duplicate `Launch Codex ...` shortcuts if they are still
 present from a previous install.
+
+The uninstaller also removes the per-user `CodexRtl.Local` sparse package
+identity and the matching locally generated code-signing certificate from the
+current user's `My` and `TrustedPeople` certificate stores.
 
 It does not remove:
 
@@ -303,6 +314,9 @@ Test-Path .\src\codex-rtl-patch.js
      replacement and will fail closed.
    - A missing runtime executable. Current unified builds require
      `ChatGPT.exe`; older builds can use `Codex.exe`.
+   - Missing Windows SDK tools: `makeappx.exe` and `signtool.exe`.
+   - A sparse package registration error. The installer must report a local
+     `CodexRtl.Local` package identity before the patched runtime can start.
 7. Do not retry installation until regular Codex works and the cause has been
    reviewed.
 

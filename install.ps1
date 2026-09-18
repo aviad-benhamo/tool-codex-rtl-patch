@@ -38,6 +38,7 @@ $ScriptPath = $MyInvocation.MyCommand.Path
 $ThisDir = if ($ScriptPath) { Split-Path -Parent $ScriptPath } else { (Get-Location).Path }
 $PatchJsSource = Join-Path $ThisDir 'src\codex-rtl-patch.js'
 $AsarIntegrityUpdaterSource = Join-Path $ThisDir 'src\update-asar-integrity.ps1'
+$PackageIdentityRegistrarSource = Join-Path $ThisDir 'src\register-rtl-package-identity.ps1'
 $LauncherScriptSource = Join-Path $ThisDir 'src\launch-codex.ps1'
 $LauncherScriptPath = Join-Path $InstallRoot 'launch-codex.ps1'
 $TaskbarActivatorSource = Join-Path $ThisDir 'src\activate-chatgpt.ps1'
@@ -119,6 +120,12 @@ function Assert-LocalPatchFile {
 function Assert-LocalAsarIntegrityUpdater {
     if (-not (Test-Path -LiteralPath $AsarIntegrityUpdaterSource -PathType Leaf)) {
         throw "Required ASAR integrity updater was not found: $AsarIntegrityUpdaterSource"
+    }
+}
+
+function Assert-LocalPackageIdentityRegistrar {
+    if (-not (Test-Path -LiteralPath $PackageIdentityRegistrarSource -PathType Leaf)) {
+        throw "Required package identity registrar was not found: $PackageIdentityRegistrarSource"
     }
 }
 
@@ -611,7 +618,8 @@ function Remove-LegacyShortcuts {
 function Save-State(
     [object]$Package,
     [string]$SourceAppDir,
-    [object]$AsarIntegrityResult
+    [object]$AsarIntegrityResult,
+    [object]$PackageIdentityResult
 ) {
     if ($DryRun) { return }
     New-Item -ItemType Directory -Force $InstallRoot | Out-Null
@@ -639,6 +647,11 @@ function Save-State(
         sourceAsarHeaderSha256 = [string]$AsarIntegrityResult.sourceAsarHeaderSha256
         patchedAsarHeaderSha256 = [string]$AsarIntegrityResult.patchedAsarHeaderSha256
         patchedAsarSha256 = (Get-FileHash -LiteralPath (Join-Path $TargetAppDir 'resources\app.asar') -Algorithm SHA256).Hash
+        rtlIdentityPackageName = [string]$PackageIdentityResult.packageName
+        rtlIdentityPackageFullName = [string]$PackageIdentityResult.packageFullName
+        rtlIdentityPackageFamilyName = [string]$PackageIdentityResult.packageFamilyName
+        rtlAppUserModelId = [string]$PackageIdentityResult.appUserModelId
+        rtlIdentityCertificateThumbprint = [string]$PackageIdentityResult.certificateThumbprint
     }
     $json = $state | ConvertTo-Json -Depth 5
     $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
@@ -650,6 +663,8 @@ Assert-LocalPatchFile
 Write-Ok "Using local patch: $PatchJsSource"
 Assert-LocalAsarIntegrityUpdater
 Write-Ok "Using ASAR integrity updater: $AsarIntegrityUpdaterSource"
+Assert-LocalPackageIdentityRegistrar
+Write-Ok "Using package identity registrar: $PackageIdentityRegistrarSource"
 Assert-LocalLauncherScript
 Write-Ok "Using local launcher script: $LauncherScriptSource"
 Assert-LocalTaskbarActivator
@@ -707,11 +722,24 @@ if ($DryRun) {
         -RuntimeExecutablePath $targetRuntime
     Write-Ok "Embedded ASAR integrity action: $($asarIntegrityResult.action)"
 }
+Write-Step 'Registering local package identity'
+if ($DryRun) {
+    $packageIdentityResult = & $PackageIdentityRegistrarSource `
+        -AppDirectory $TargetAppDir `
+        -StateDirectory $InstallRoot `
+        -DryRun
+    Write-Ok "Package identity tools: $($packageIdentityResult.makeAppxPath); $($packageIdentityResult.signToolPath)"
+} else {
+    $packageIdentityResult = & $PackageIdentityRegistrarSource `
+        -AppDirectory $TargetAppDir `
+        -StateDirectory $InstallRoot
+    Write-Ok "Registered package identity: $($packageIdentityResult.appUserModelId)"
+}
 Install-LauncherScript
 Install-TaskbarActivator
 New-CodexShortcuts $TargetAppDir $sourceAppDir $runtimeExecutableName $runtimeIconRelativePath
 Remove-LegacyShortcuts
-Save-State $pkg $sourceAppDir $asarIntegrityResult
+Save-State $pkg $sourceAppDir $asarIntegrityResult $packageIdentityResult
 
 Write-Step 'Done'
 if ($DryRun) {
@@ -723,6 +751,5 @@ if ($DryRun) {
 }
 
 if ($Launch -and -not $DryRun) {
-    $targetRuntime = Resolve-CodexRuntimeExecutable $TargetAppDir
-    Start-Process -FilePath $targetRuntime -WorkingDirectory $TargetAppDir
+    Start-Process -FilePath $ExplorerPath -ArgumentList "shell:AppsFolder\$($packageIdentityResult.appUserModelId)"
 }

@@ -85,6 +85,7 @@ Requirements:
 - Windows 10 or Windows 11.
 - Codex Desktop installed from the official source.
 - Node.js 22 or newer, including npm and `npx`.
+- Windows SDK, including the x64 `makeappx.exe` and `signtool.exe` tools.
 - A reviewed local clone of this repository.
 
 Check prerequisites from PowerShell:
@@ -140,6 +141,14 @@ repository:
 - Launcher source: `src/launch-codex.ps1`
 - Local install root: `%LOCALAPPDATA%\OpenAI\CodexRtl`
 - ASAR tool: `npx --yes @electron/asar@4.2.0`
+
+The installer also uses the locally installed Windows SDK to register a
+per-user sparse MSIX identity for the copied RTL runtime. This is required by
+current Codex Desktop builds that use Windows APIs requiring package identity.
+It creates one self-signed, code-signing certificate in the current user's
+certificate stores only; the uninstaller removes that certificate and the
+associated local identity package. No certificate, package, or application
+file is added to this repository.
 
 For Electron builds that enable embedded ASAR integrity validation, the
 installer also updates the expected ASAR header hash in the copied runtime.
@@ -230,11 +239,13 @@ Runtime flow:
 7. If the runtime enforces embedded ASAR integrity, the copied executable's
    expected header hash is updated to match the patched ASAR without disabling
    integrity validation.
-8. Desktop shortcuts are created for `Codex RTL`, `Codex (Original)`, and
+8. A locally signed sparse MSIX package grants package identity to the copied
+   RTL runtime without modifying the official OpenAI package.
+9. Desktop shortcuts are created for `Codex RTL`, `Codex (Original)`, and
    `ChatGPT`. The `ChatGPT` shortcut is a no-kill taskbar activation entry point.
-9. `src/launch-codex.ps1` stops only recognized Codex Desktop processes before
+10. `src/launch-codex.ps1` stops only recognized Codex Desktop processes before
    launching the selected variant.
-10. When launching `Codex RTL`, the launcher compares the official Codex version
+11. When launching `Codex RTL`, the launcher compares the official Codex version
    with the recorded RTL source version and displays a rebuild prompt when the
    official app has changed.
 

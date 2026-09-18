@@ -166,6 +166,7 @@ function Test-InstallerScript([string]$ScriptPath) {
     $requiredPaths = @(
         (Join-Path $repoDir 'src\codex-rtl-patch.js'),
         (Join-Path $repoDir 'src\update-asar-integrity.ps1'),
+        (Join-Path $repoDir 'src\register-rtl-package-identity.ps1'),
         (Join-Path $repoDir 'src\launch-codex.ps1')
     )
 
@@ -297,9 +298,26 @@ function Save-LastSelectedVariant([string]$Variant) {
     [System.IO.File]::WriteAllText($statePath, $json + "`n", $utf8NoBom)
 }
 
-function Start-Rtl {
-    $rtlRuntime = Resolve-CodexRuntimeExecutable $rtlAppDir
-    Start-Process -FilePath $rtlRuntime -WorkingDirectory $rtlAppDir
+function Get-RtlShellTarget([object]$State) {
+    if (-not $State -or -not ($State.PSObject.Properties.Name -contains 'rtlAppUserModelId')) {
+        return $null
+    }
+
+    $appUserModelId = [string]$State.rtlAppUserModelId
+    if (-not $appUserModelId -or $appUserModelId -notmatch '^[^!]+!App$') {
+        return $null
+    }
+
+    return "shell:AppsFolder\$appUserModelId"
+}
+
+function Start-Rtl([object]$State) {
+    $rtlShellTarget = Get-RtlShellTarget $State
+    if (-not $rtlShellTarget) {
+        throw 'Codex RTL package identity is missing. Re-run install.ps1 before launching the patched copy.'
+    }
+
+    Start-Process -FilePath (Join-Path $env:WINDIR 'explorer.exe') -ArgumentList $rtlShellTarget
 }
 
 function Invoke-RtlRebuild([object]$State) {
@@ -386,7 +404,7 @@ Select Cancel to stop.
     }
 
     if (Invoke-RtlRebuild $state) {
-        Start-Rtl
+        Start-Rtl (Read-PatchState)
     }
     return $false
 }
@@ -398,7 +416,7 @@ if ($Variant -eq 'Rtl') {
 
     Save-LastSelectedVariant $Variant
     Stop-CodexDesktopProcesses
-    Start-Rtl
+    Start-Rtl (Read-PatchState)
     return
 }
 

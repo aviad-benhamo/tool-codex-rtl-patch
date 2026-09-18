@@ -126,7 +126,10 @@ assert.match(
 );
 assert.match(installer, /\$sourceRuntime = Resolve-CodexRuntimeExecutable \$sourceAppDir/);
 assert.match(installer, /\$targetRuntime = Resolve-CodexRuntimeExecutable \$TargetAppDir/);
-assert.match(installer, /Start-Process -FilePath \$targetRuntime -WorkingDirectory \$TargetAppDir/);
+assert.match(
+  installer,
+  /Start-Process -FilePath \$ExplorerPath -ArgumentList "shell:AppsFolder\\\$\(\$packageIdentityResult\.appUserModelId\)"/
+);
 assert.match(installer, /resources\\icon-chatgpt\.ico', 'resources\\icon\.ico/);
 assert.match(installer, /function Get-AsarUnpackedEntries/);
 assert.match(installer, /list --is-pack/);
@@ -137,11 +140,18 @@ assert.match(installer, /--unpack-dir/);
 assert.match(installer, /function Assert-AsarUnpackedEntriesPreserved/);
 assert.match(installer, /Preserved \$\(\$patchedUnpackedEntries\.Count\) unpacked ASAR entries/);
 assert.match(installer, /src\\update-asar-integrity\.ps1/);
+assert.match(installer, /src\\register-rtl-package-identity\.ps1/);
+assert.match(installer, /Registering local package identity/);
+assert.match(installer, /rtlIdentityPackageFullName/);
+assert.match(installer, /rtlAppUserModelId/);
 assert.match(installer, /Updating embedded ASAR integrity metadata/);
 assert.match(installer, /sourceAsarHeaderSha256/);
 assert.match(installer, /patchedAsarHeaderSha256/);
 assert.match(installer, /patchedAsarSha256/);
 assert.match(launcher, /src\\update-asar-integrity\.ps1/);
+assert.match(launcher, /src\\register-rtl-package-identity\.ps1/);
+assert.match(launcher, /function Get-RtlShellTarget/);
+assert.match(launcher, /shell:AppsFolder\\\$appUserModelId/);
 
 assert.doesNotMatch(rtlPatch, /patch-state\.json|installerScriptPath|Get-AppxPackage/);
 
