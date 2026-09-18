@@ -520,7 +520,8 @@ function New-ChatGptShortcut(
     [string]$RtlAppDir,
     [string]$OriginalAppDir,
     [string]$RuntimeExecutableName,
-    [string]$IconRelativePath
+    [string]$IconRelativePath,
+    [string]$AppUserModelId = $TaskbarAppUserModelId
 ) {
     $rtlRuntime = Join-Path $RtlAppDir $RuntimeExecutableName
     if (-not $DryRun -and -not (Test-Path -LiteralPath $rtlRuntime -PathType Leaf)) {
@@ -530,11 +531,15 @@ function New-ChatGptShortcut(
     $rtlIcon = if ($IconRelativePath) { Join-Path $RtlAppDir $IconRelativePath } else { $null }
     $taskbarIcon = if ($rtlIcon) { $rtlIcon } else { $rtlRuntime }
 
-    Set-ChatGptShortcutTarget $ChatGptShortcutPath $taskbarIcon
-    Update-PinnedTaskbarChatGptShortcuts $rtlRuntime $taskbarIcon
+    Set-ChatGptShortcutTarget $ChatGptShortcutPath $taskbarIcon $AppUserModelId
+    Update-PinnedTaskbarChatGptShortcuts $rtlRuntime $taskbarIcon $AppUserModelId
 }
 
-function Set-ChatGptShortcutTarget([string]$ShortcutPath, [string]$TaskbarIcon) {
+function Set-ChatGptShortcutTarget(
+    [string]$ShortcutPath,
+    [string]$TaskbarIcon,
+    [string]$AppUserModelId
+) {
     $taskbarArguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$TaskbarActivatorPath`""
     $taskbarRelaunchCommand = "`"$PowerShellPath`" $taskbarArguments"
     New-WindowsShortcut `
@@ -546,13 +551,17 @@ function Set-ChatGptShortcutTarget([string]$ShortcutPath, [string]$TaskbarIcon) 
         -Description 'Activate the current Codex or ChatGPT Desktop window without restarting it'
     Set-ShortcutAppUserModelProperties `
         -ShortcutPath $ShortcutPath `
-        -AppUserModelId $TaskbarAppUserModelId `
+        -AppUserModelId $AppUserModelId `
         -RelaunchCommand $taskbarRelaunchCommand `
         -RelaunchDisplayName 'ChatGPT' `
         -RelaunchIconResource "$taskbarIcon,0"
 }
 
-function Update-PinnedTaskbarChatGptShortcuts([string]$RtlRuntime, [string]$TaskbarIcon) {
+function Update-PinnedTaskbarChatGptShortcuts(
+    [string]$RtlRuntime,
+    [string]$TaskbarIcon,
+    [string]$AppUserModelId
+) {
     $pinnedTaskbarPath = Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'
     if (-not (Test-Path -LiteralPath $pinnedTaskbarPath -PathType Container)) { return }
 
@@ -565,12 +574,14 @@ function Update-PinnedTaskbarChatGptShortcuts([string]$RtlRuntime, [string]$Task
                     continue
                 }
                 $targetPath = Resolve-FullPath $shortcut.TargetPath
-                if (-not $targetPath -or -not $targetPath.Equals((Resolve-FullPath $RtlRuntime), [System.StringComparison]::OrdinalIgnoreCase)) {
+                $isLegacyRtlTarget = $targetPath -and $targetPath.Equals((Resolve-FullPath $RtlRuntime), [System.StringComparison]::OrdinalIgnoreCase)
+                $isTaskbarActivator = $shortcut.Arguments -and $shortcut.Arguments.IndexOf($TaskbarActivatorPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+                if (-not $isLegacyRtlTarget -and -not $isTaskbarActivator) {
                     continue
                 }
 
-                Set-ChatGptShortcutTarget $item.FullName $TaskbarIcon
-                Write-Ok "Updated legacy pinned ChatGPT shortcut: $($item.Name)"
+                Set-ChatGptShortcutTarget $item.FullName $TaskbarIcon $AppUserModelId
+                Write-Ok "Updated pinned ChatGPT shortcut: $($item.Name)"
             } finally {
                 [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut)
             }
@@ -584,7 +595,8 @@ function New-CodexShortcuts(
     [string]$RtlAppDir,
     [string]$OriginalAppDir,
     [string]$RuntimeExecutableName,
-    [string]$IconRelativePath
+    [string]$IconRelativePath,
+    [string]$RtlAppUserModelId
 ) {
     $rtlIcon = if ($IconRelativePath) { Join-Path $RtlAppDir $IconRelativePath } else { $null }
     $originalIcon = if ($IconRelativePath) { Join-Path $OriginalAppDir $IconRelativePath } else { $null }
@@ -606,7 +618,22 @@ function New-CodexShortcuts(
         -IconLocation $originalIcon `
         -Description 'Open original Codex through the Desktop-safe launcher'
 
-    New-ChatGptShortcut $RtlAppDir $OriginalAppDir $RuntimeExecutableName $IconRelativePath
+    New-ChatGptShortcut $RtlAppDir $OriginalAppDir $RuntimeExecutableName $IconRelativePath $RtlAppUserModelId
+}
+
+function Get-InstalledRtlAppUserModelId {
+    if (-not (Test-Path -LiteralPath $StatePath -PathType Leaf)) {
+        return $TaskbarAppUserModelId
+    }
+
+    try {
+        $state = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
+        if ($state.rtlAppUserModelId -match '^[^!]+!App$') {
+            return [string]$state.rtlAppUserModelId
+        }
+    } catch { }
+
+    return $TaskbarAppUserModelId
 }
 
 function Remove-LegacyShortcuts {
@@ -698,7 +725,7 @@ Assert-UnderPath $TargetAppDir $InstallRoot
 if ($InstallTaskbarShortcutOnly) {
     Write-Step 'Installing ChatGPT taskbar shortcut only'
     Install-TaskbarActivator
-    New-ChatGptShortcut $TargetAppDir $sourceAppDir $runtimeExecutableName $runtimeIconRelativePath
+    New-ChatGptShortcut $TargetAppDir $sourceAppDir $runtimeExecutableName $runtimeIconRelativePath (Get-InstalledRtlAppUserModelId)
     if ($DryRun) {
         Write-Ok 'Taskbar shortcut dry run completed. No files were changed.'
     } else {
@@ -747,7 +774,8 @@ if ($DryRun) {
 }
 Install-LauncherScript
 Install-TaskbarActivator
-New-CodexShortcuts $TargetAppDir $sourceAppDir $runtimeExecutableName $runtimeIconRelativePath
+$shortcutAppUserModelId = if ($DryRun) { $TaskbarAppUserModelId } else { $packageIdentityResult.appUserModelId }
+New-CodexShortcuts $TargetAppDir $sourceAppDir $runtimeExecutableName $runtimeIconRelativePath $shortcutAppUserModelId
 Remove-LegacyShortcuts
 Save-State $pkg $sourceAppDir $asarIntegrityResult $packageIdentityResult
 
