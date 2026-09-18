@@ -29,11 +29,14 @@ assert.match(installer, /Set\(store, 5, appId\)/);
 assert.match(installer, /Set\(store, 2, command\)/);
 assert.match(installer, /Set\(store, 4, name\)/);
 assert.match(installer, /Set\(store, 3, icon\)/);
-assert.match(installer, /Set-ChatGptShortcutTarget \$ChatGptShortcutPath \$taskbarIcon/);
+assert.match(installer, /Set-ChatGptShortcutTarget \$ChatGptShortcutPath \$taskbarIcon \$AppUserModelId/);
 assert.match(installer, /activate-chatgpt\.ps1/);
 assert.match(installer, /\[switch\]\$InstallTaskbarShortcutOnly/);
 assert.match(installer, /New-ChatGptShortcut \$TargetAppDir \$sourceAppDir/);
 assert.match(installer, /function Update-PinnedTaskbarChatGptShortcuts/);
-assert.match(installer, /Updated legacy pinned ChatGPT shortcut/);
+assert.match(installer, /function Get-InstalledRtlAppUserModelId/);
+assert.match(installer, /rtlAppUserModelId/);
+assert.match(installer, /\$isTaskbarActivator = \$shortcut\.Arguments -and \$shortcut\.Arguments\.IndexOf/);
+assert.match(installer, /Updated pinned ChatGPT shortcut/);
 
 console.log("Taskbar activation wiring tests passed.");
