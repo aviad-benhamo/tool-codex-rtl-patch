@@ -12,6 +12,12 @@ $rtlAppDir = Join-Path $installRoot 'app'
 $statePath = Join-Path $installRoot 'patch-state.json'
 $originalShellTarget = 'shell:AppsFolder\OpenAI.Codex_2p2nqsd0c76g0!App'
 
+function Test-IsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Resolve-FullPath([string]$Path) {
     if (-not $Path) {
         return $null
@@ -340,11 +346,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
     $powershellPath = Join-Path $PSHOME 'powershell.exe'
     $installerArguments = "-NoProfile -ExecutionPolicy Bypass -File `"$installerScriptPath`""
-    $proc = Start-Process `
-        -FilePath $powershellPath `
-        -ArgumentList $installerArguments `
-        -Wait `
-        -PassThru
+    $installerStartParameters = @{
+        FilePath = $powershellPath
+        ArgumentList = $installerArguments
+        Wait = $true
+        PassThru = $true
+    }
+    if (-not (Test-IsAdministrator)) {
+        $installerStartParameters.Verb = 'RunAs'
+    }
+
+    try {
+        $proc = Start-Process @installerStartParameters
+    } catch {
+        $message = 'Codex RTL rebuild requires administrator approval to register its local package identity. The existing RTL copy was left in place.'
+        Show-MessageBox $message 'Codex RTL rebuild requires approval' 'OK' 'Warning' | Out-Null
+        return $false
+    }
 
     if ($proc.ExitCode -ne 0) {
         $message = "Codex RTL rebuild failed with exit code $($proc.ExitCode). The existing RTL copy was left in place."
