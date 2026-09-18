@@ -146,6 +146,17 @@ function Read-LastSelectedVariant {
     return $null
 }
 
+function Read-RtlAppUserModelId {
+    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) { return $null }
+    try {
+        $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+        if ($state.rtlAppUserModelId -match '^[^!]+!App$') {
+            return [string]$state.rtlAppUserModelId
+        }
+    } catch { }
+    return $null
+}
+
 function Start-LastSelectedVariant {
     $variant = Read-LastSelectedVariant
     if (-not $variant) { $variant = 'Rtl' }
@@ -155,11 +166,11 @@ function Start-LastSelectedVariant {
         return
     }
 
-    $rtlRuntime = Resolve-CodexRuntimeExecutable $rtlAppDir
-    if (-not $rtlRuntime) {
-        throw 'The last selected Codex RTL runtime is not installed. Re-run install.ps1, then use Codex RTL.'
+    $rtlAppUserModelId = Read-RtlAppUserModelId
+    if (-not $rtlAppUserModelId) {
+        throw 'The Codex RTL package identity is not installed. Re-run install.ps1, then use Codex RTL.'
     }
-    Start-Process -FilePath $rtlRuntime -WorkingDirectory $rtlAppDir
+    Start-Process -FilePath (Join-Path $env:WINDIR 'explorer.exe') -ArgumentList "shell:AppsFolder\$rtlAppUserModelId"
 }
 
 $appDirs = @(Get-SupportedAppDirs)
