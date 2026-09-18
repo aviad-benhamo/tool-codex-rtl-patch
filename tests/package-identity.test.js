@@ -30,18 +30,24 @@ assert.match(registrarSource, /uap10:AllowExternalContent>true/);
 assert.match(registrarSource, /rescap:Capability Name="runFullTrust"/);
 assert.match(registrarSource, /uap10:TrustLevel="mediumIL"/);
 assert.match(registrarSource, /uap10:RuntimeBehavior="win32App"/);
+assert.doesNotMatch(registrarSource, /EntryPoint="Windows\.FullTrustApplication"/);
+assert.match(registrarSource, /resources\\default_app\\icon\.png/);
+assert.doesNotMatch(registrarSource, /icon-chatgpt\.ico/);
 assert.match(registrarSource, /packageName="\$PackageName"/);
 assert.match(registrarSource, /applicationId="\$ApplicationId"/);
 assert.match(registrarSource, /Add-AppxPackage -Path \$packagePath -ExternalLocation \$AppDirectory/);
 assert.match(registrarSource, /Remove-AppxPackage -Package \$package\.PackageFullName/);
 assert.match(registrarSource, /New-SelfSignedCertificate/);
-assert.match(registrarSource, /Cert:\\CurrentUser\\TrustedPeople/);
+assert.match(registrarSource, /function Test-IsAdministrator/);
+assert.match(registrarSource, /Cert:\\LocalMachine\\TrustedPeople/);
+assert.doesNotMatch(registrarSource, /Cert:\\CurrentUser\\Root/);
 assert.match(registrarSource, /makeappx\.exe/);
 assert.match(registrarSource, /signtool\.exe/);
 
 assert.match(installer, /src\\register-rtl-package-identity\.ps1/);
 assert.match(installer, /Registering local package identity/);
 assert.match(installer, /rtlAppUserModelId/);
+assert.match(installer, /Administrator rights are required to install Codex RTL package identity/);
 assert.match(
   installer,
   /shell:AppsFolder\\\$\(\$packageIdentityResult\.appUserModelId\)/
@@ -55,6 +61,8 @@ assert.match(activator, /shell:AppsFolder\\\$rtlAppUserModelId/);
 assert.match(uninstaller, /CodexRtl\.Local/);
 assert.match(uninstaller, /Remove-RtlPackageIdentity/);
 assert.match(uninstaller, /rtlIdentityCertificateThumbprint/);
+assert.match(uninstaller, /Cert:\\LocalMachine\\TrustedPeople/);
+assert.match(uninstaller, /Administrator rights are required to remove the Codex RTL package identity certificate/);
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "codex-rtl-identity-"));
 try {

@@ -34,6 +34,12 @@ function Write-Result([object]$Result) {
     }
 }
 
+function Test-IsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Resolve-WindowsSdkTool([string]$ToolName) {
     $command = Get-Command $ToolName -ErrorAction SilentlyContinue
     if ($command) {
@@ -77,27 +83,29 @@ function Get-OrCreateSigningCertificate {
             -CertStoreLocation Cert:\CurrentUser\My `
             -NotAfter (Get-Date).AddYears(10) `
             -TextExtension @(
-                '2.5.29.19={text}CA=false',
+                '2.5.29.19={text}',
                 '2.5.29.37={text}1.3.6.1.5.5.7.3.3'
             )
         $created = $true
     }
 
-    $trustedCertificate = Get-ChildItem -Path Cert:\CurrentUser\TrustedPeople |
-        Where-Object { $_.Thumbprint -eq $certificate.Thumbprint } |
-        Select-Object -First 1
-    $trustedAdded = $false
-    if (-not $trustedCertificate) {
-        $certificatePath = Join-Path $StateDirectory 'codex-rtl-package-identity.cer'
+    $certificatePath = Join-Path $StateDirectory 'codex-rtl-package-identity.cer'
+    $trustedStoresAdded = @()
+    foreach ($storePath in @('Cert:\LocalMachine\TrustedPeople')) {
+        $trustedCertificate = Get-ChildItem -Path $storePath |
+            Where-Object { $_.Thumbprint -eq $certificate.Thumbprint } |
+            Select-Object -First 1
+        if ($trustedCertificate) { continue }
+
         Export-Certificate -Cert $certificate -FilePath $certificatePath -Force | Out-Null
-        Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
-        $trustedAdded = $true
+        Import-Certificate -FilePath $certificatePath -CertStoreLocation $storePath | Out-Null
+        $trustedStoresAdded += $storePath
     }
 
     return [PSCustomObject]@{
         certificate = $certificate
         created = $created
-        trustedAdded = $trustedAdded
+        trustedStoresAdded = $trustedStoresAdded
     }
 }
 
@@ -128,7 +136,7 @@ function Write-IdentityPackageManifest([string]$Path, [string]$Publisher) {
   <Properties>
     <DisplayName>Codex RTL</DisplayName>
     <PublisherDisplayName>Codex RTL Local Patch</PublisherDisplayName>
-    <Logo>resources\\icon-chatgpt.ico</Logo>
+    <Logo>resources\default_app\icon.png</Logo>
     <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
   </Properties>
   <Resources>
@@ -142,8 +150,8 @@ function Write-IdentityPackageManifest([string]$Path, [string]$Publisher) {
     <rescap:Capability Name="unvirtualizedResources" />
   </Capabilities>
   <Applications>
-    <Application Id="$ApplicationId" Executable="$RuntimeExecutableName" EntryPoint="Windows.FullTrustApplication" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
-      <uap:VisualElements AppListEntry="none" DisplayName="Codex RTL" Description="Locally patched Codex Desktop" BackgroundColor="transparent" Square150x150Logo="resources\\icon-chatgpt.ico" Square44x44Logo="resources\\icon-chatgpt.ico" />
+    <Application Id="$ApplicationId" Executable="$RuntimeExecutableName" uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App">
+      <uap:VisualElements AppListEntry="none" DisplayName="Codex RTL" Description="Locally patched Codex Desktop" BackgroundColor="transparent" Square150x150Logo="resources\default_app\icon.png" Square44x44Logo="resources\default_app\icon.png" />
     </Application>
   </Applications>
 </Package>
@@ -189,6 +197,10 @@ if ($DryRun) {
     return
 }
 
+if (-not (Test-IsAdministrator)) {
+    throw 'Administrator rights are required to trust the Codex RTL package certificate. Open PowerShell as Administrator and rerun install.ps1.'
+}
+
 $makeAppx = Resolve-WindowsSdkTool 'makeappx.exe'
 $signTool = Resolve-WindowsSdkTool 'signtool.exe'
 New-Item -ItemType Directory -Force $identityDirectory | Out-Null
@@ -230,8 +242,10 @@ try {
         packagePath = $packagePath
     })
 } catch {
-    if ($certificateRecord -and $certificateRecord.trustedAdded) {
-        Remove-Item -LiteralPath (Join-Path Cert:\CurrentUser\TrustedPeople $certificateRecord.certificate.Thumbprint) -Force -ErrorAction SilentlyContinue
+    if ($certificateRecord) {
+        foreach ($storePath in @($certificateRecord.trustedStoresAdded)) {
+            Remove-Item -LiteralPath (Join-Path $storePath $certificateRecord.certificate.Thumbprint) -Force -ErrorAction SilentlyContinue
+        }
     }
     if ($certificateRecord -and $certificateRecord.created) {
         Remove-Item -LiteralPath (Join-Path Cert:\CurrentUser\My $certificateRecord.certificate.Thumbprint) -Force -ErrorAction SilentlyContinue

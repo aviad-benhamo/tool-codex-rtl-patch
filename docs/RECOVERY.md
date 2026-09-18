@@ -7,8 +7,8 @@ does not intentionally modify the official Microsoft Store/MSIX installation
 under `WindowsApps`. Recovery normally consists of removing the copied app and
 returning to the regular Codex Desktop shortcut.
 
-Run all commands from PowerShell. Save active work before stopping Codex
-Desktop processes.
+Run all commands from an Administrator PowerShell session. Save active work
+before stopping Codex Desktop processes.
 
 ## Quick Recovery
 
@@ -90,7 +90,7 @@ present from a previous install.
 
 The uninstaller also removes the per-user `CodexRtl.Local` sparse package
 identity and the matching locally generated code-signing certificate from the
-current user's `My` and `TrustedPeople` certificate stores.
+current user's `My` store and Local Machine `TrustedPeople` certificate store.
 
 It does not remove:
 

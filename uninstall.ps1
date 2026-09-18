@@ -45,6 +45,12 @@ function Read-PatchState {
     }
 }
 
+function Test-IsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Remove-RtlPackageIdentity([object]$State) {
     $packages = @(Get-AppxPackage -Name $IdentityPackageName -ErrorAction SilentlyContinue)
     foreach ($package in $packages) {
@@ -63,7 +69,7 @@ function Remove-RtlPackageIdentity([object]$State) {
     $thumbprint = [string]$State.rtlIdentityCertificateThumbprint
     if (-not $thumbprint) { return }
 
-    foreach ($storePath in @('Cert:\CurrentUser\TrustedPeople', 'Cert:\CurrentUser\My')) {
+    foreach ($storePath in @('Cert:\LocalMachine\TrustedPeople', 'Cert:\CurrentUser\My')) {
         $certificatePath = Join-Path $storePath $thumbprint
         if (-not (Test-Path -LiteralPath $certificatePath -PathType Leaf)) { continue }
         $certificate = Get-Item -LiteralPath $certificatePath
@@ -81,6 +87,9 @@ function Remove-RtlPackageIdentity([object]$State) {
 
 $expectedParent = Join-Path $env:LOCALAPPDATA 'OpenAI'
 Assert-UnderPath $InstallRoot $expectedParent
+if (-not $DryRun -and -not (Test-IsAdministrator)) {
+    throw 'Administrator rights are required to remove the Codex RTL package identity certificate. Open PowerShell as Administrator and rerun this command.'
+}
 $state = Read-PatchState
 Remove-RtlPackageIdentity $state
 

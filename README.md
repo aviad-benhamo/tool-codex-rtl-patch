@@ -86,6 +86,7 @@ Requirements:
 - Codex Desktop installed from the official source.
 - Node.js 22 or newer, including npm and `npx`.
 - Windows SDK, including the x64 `makeappx.exe` and `signtool.exe` tools.
+- An administrator PowerShell session for the non-dry-run install and uninstall.
 - A reviewed local clone of this repository.
 
 Check prerequisites from PowerShell:
@@ -97,7 +98,7 @@ npx.cmd --version
 Test-Path .\src\codex-rtl-patch.js
 ```
 
-Run a dry run first:
+Run a dry run first. For the real install, open PowerShell as Administrator:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -DryRun
@@ -146,9 +147,10 @@ The installer also uses the locally installed Windows SDK to register a
 per-user sparse MSIX identity for the copied RTL runtime. This is required by
 current Codex Desktop builds that use Windows APIs requiring package identity.
 It creates one self-signed, code-signing certificate in the current user's
-certificate stores only; the uninstaller removes that certificate and the
-associated local identity package. No certificate, package, or application
-file is added to this repository.
+personal store and trusts its public certificate only in Local Machine Trusted
+People, which Windows requires for local MSIX package deployment. The
+uninstaller removes that certificate and the associated local identity package.
+No certificate, package, or application file is added to this repository.
 
 For Electron builds that enable embedded ASAR integrity validation, the
 installer also updates the expected ASAR header hash in the copied runtime.

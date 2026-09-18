@@ -129,6 +129,12 @@ function Assert-LocalPackageIdentityRegistrar {
     }
 }
 
+function Test-IsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Assert-LocalLauncherScript {
     if (-not (Test-Path -LiteralPath $LauncherScriptSource -PathType Leaf)) {
         throw "Required launcher script was not found: $LauncherScriptSource"
@@ -669,6 +675,10 @@ Assert-LocalLauncherScript
 Write-Ok "Using local launcher script: $LauncherScriptSource"
 Assert-LocalTaskbarActivator
 Write-Ok "Using local taskbar activator: $TaskbarActivatorSource"
+
+if (-not $DryRun -and -not $InstallTaskbarShortcutOnly -and -not (Test-IsAdministrator)) {
+    throw 'Administrator rights are required to install Codex RTL package identity. Open PowerShell as Administrator and rerun this command.'
+}
 
 Write-Step 'Finding installed Codex'
 $pkg = Get-CodexPackage
